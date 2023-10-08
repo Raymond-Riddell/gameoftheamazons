@@ -833,6 +833,10 @@ function newColGame() {
 //TODO: make a SquareGridGame class that all these grid games inherit from.
 
 
+
+
+
+
 ///////////////////////////// Binary Geography ////////////////////////////////
 
 /**
@@ -1177,6 +1181,714 @@ function newBinaryGeographyGame() {
     var ref = new Referee(game, players, viewFactory, "MainGameBoard", $('messageBox'), controlForm);
     
 }
+
+
+
+
+
+
+
+///////////////////////////// Blackout ////////////////////////////////
+
+/**
+ * Blackout
+ * 
+ * Grids are stored as two 2D arrays of booleans.  True means that that switch is connected to the affiliated light; false means it is not.
+ * Switches are stored a list of integers (columnsPlayed and rowsPlayed).  -1 means unplayed; 0 means turned off; 1 means turned on.
+ * Right has some passes they can use after they turn all their switches, so that's modeled by the integer rightPasses.
+ * @author Kyle Burke
+ */
+var Blackout = Class.create(CombinatorialGame, {
+   
+    /**
+     * Constructor.
+     */
+    initialize: function(numLights, numAllOffSwitches, numOneOnSwitches, connectedProbability) {
+        this.playerNames = Blackout.prototype.PLAYER_NAMES;
+        var connectedPr = connectedProbability || .5;
+        this.allOffGrid = [];
+        for (var i = 0; i < numLights; i++) {
+            const column = [];
+            for (var j = 0; j < numAllOffSwitches; j++) {
+                //add a connection based on the probability
+                column.push(Math.random() < connectedPr);
+            }
+            this.allOffGrid.push(column);
+        }
+        //check that no switch has no connections
+        for (var switchI = 0; switchI < numAllOffSwitches; switchI ++) {
+            var connected = false;
+            for (var lightI = 0; lightI < numLights; lightI ++) {
+                if (this.allOffGrid[lightI][switchI] == true) {
+                    connection = true;
+                    break;
+                }
+            }
+            if (!connected) {
+                const connIndex = Math.floor(Math.random() * numLights);
+                this.allOffGrid[connIndex][switchI] = true;
+            }
+        }
+        
+        this.allOffSwitches = [];
+        for (var i = 0; i < numAllOffSwitches; i++) {
+            this.allOffSwitches.push(-1); // switch hasn't been used yet.
+        }
+        
+        this.oneOnGrid = [];
+        for (var i = 0; i < numLights; i++) {
+            const column = [];
+            for (var j = 0; j < numOneOnSwitches; j++) {
+                //add a connection based on the probability
+                column.push(Math.random() < connectedPr);
+            }
+            this.oneOnGrid.push(column);
+        }
+        //check that no switch has no connections
+        for (var switchI = 0; switchI < numOneOnSwitches; switchI ++) {
+            var connected = false;
+            for (var lightI = 0; lightI < numLights; lightI ++) {
+                if (this.oneOnGrid[lightI][switchI] == true) {
+                    connection = true;
+                    break;
+                }
+            }
+            if (!connected) {
+                const connIndex = Math.floor(Math.random() * numLights);
+                this.oneOnGrid[connIndex][switchI] = true;
+            }
+        }
+        
+        this.oneOnSwitches = [];
+        for (var i = 0; i < numOneOnSwitches; i++) {
+            this.oneOnSwitches.push(-1); // switch hasn't been used yet.
+        }
+        //Right can pass if they are out of light switches, but Left still has switches.
+        this.rightPasses = numAllOffSwitches - numOneOnSwitches;
+        this.lights = [];
+        for (var i = 0; i < numLights; i++) {
+            this.lights.push(true);
+        }
+        
+    }
+    
+    /**
+     * Returns the number of lights of this board.
+     */
+    ,getNumLights: function() {
+        return this.lights.length;
+    }
+    
+    /**
+     * Returns the width of this board.
+     */
+    ,getWidth: function() {
+        return this.lights.length;
+    }
+    
+    /**
+     * Returns the number of switches for the All Off player.
+     */
+    ,getNumAllOffSwitches: function() {
+        return this.allOffSwitches.length;
+    }
+    
+    /**
+     * Returns the number of switches for the One On player.
+     */
+    ,getNumOneOnSwitches: function() {
+        return this.oneOnSwitches.length;
+    }
+    
+    /**
+     * Returns the height of this board.  This is the number of total switches.
+     */
+    ,getHeight: function() {
+        if (this.getWidth() == 0) {
+            return 0;
+        } else {
+            return this.allOffSwitches.length + this.oneOnSwitches.length;
+        }
+    }
+    
+    /**
+     * Equals!
+     */
+    ,equals: function(other) {
+        //check that the dimensions match
+        if (!omniEquals(this.allOffGrid, other.allOffGrid)) return false;
+        if (!omniEquals(this.allOffSwitches, other.allOffSwitches)) return false;
+        if (!omniEquals(this.oneOnGrid, other.oneOnGrid)) return false;
+        if (!omniEquals(this.oneOnSwitches, other.oneOnSwitches)) return false;
+        if (!omniEquals(this.lights, other.lights)) return false;
+        
+        return this.rightPasses == other.rightPasses;
+    }
+    
+    /**
+     * Clone.
+     */
+    ,clone: function() {
+        const width = this.getNumLights();
+        const numAllOffSwitches = this.getNumAllOffSwitches();
+        const numOneOnSwitches = this.getNumOneOnSwitches();
+        const other = new Blackout(width, numAllOffSwitches, numOneOnSwitches);
+        for (var col = 0; col < width; col++) {
+            other.lights[col] = this.lights[col];
+            for (var row = 0; row < numAllOffSwitches; row++) {
+                other.allOffGrid[col][row] = this.allOffGrid[col][row];
+            }
+            for (var row = 0; row < numOneOnSwitches; row++) {
+                other.oneOnGrid[col][row] = this.oneOnGrid[col][row];
+            }
+        }
+        for (var row = 0; row < numAllOffSwitches; row++) {
+            other.allOffSwitches[row] = this.allOffSwitches[row];
+        }
+        for (var row = 0; row < numOneOnSwitches; row++) {
+            other.oneOnSwitches[row] = this.oneOnSwitches[row];
+        }
+        other.rightPasses = this.rightPasses;
+        return other;
+    }
+    
+    /**
+     * Returns whether the board is blacked out, meaning all lights are off.
+     */
+    ,isBlackout: function() {
+        for (var col = 0; col < this.getNumLights(); col ++) {
+            if (this.lights[col]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Gets the options.
+     */
+    ,getOptionsForPlayer: function(playerId) {
+        const options = [];
+        const numLights = this.getNumLights();
+        //we need to have explicit different parts for Left and Right
+        if (playerId == CombinatorialGame.prototype.LEFT) {
+            //generate the AllOff player's options
+            const numAllOffSwitches = this.getNumAllOffSwitches();
+            for (var row = 0; row < numAllOffSwitches; row++) {
+                if (this.allOffSwitches[row] == -1) {
+                    //add the zero option
+                    const zeroOption = this.clone();
+                    zeroOption.allOffSwitches[row] = 0;
+                    options.push(zeroOption);
+                    
+                    //add the one option that changes all lights connected to that switch
+                    const oneOption = this.clone();
+                    oneOption.allOffSwitches[row] = 1;
+                    for (var col = 0; col < numLights; col++) {
+                        if (this.allOffGrid[col][row]) {
+                            //the row-th switch is connected to the col-th light, so toggle that light
+                            oneOption.lights[col] = !oneOption.lights[col];
+                        }
+                    }
+                    options.push(oneOption);
+                }
+            }
+        } else if (playerId == CombinatorialGame.prototype.RIGHT) {
+            const numOneOnSwitches = this.getNumOneOnSwitches();
+            for (var row = 0; row < numOneOnSwitches; row++) {
+                if (this.oneOnSwitches[row] == -1) {
+                    //add the zero option
+                    const zeroOption = this.clone();
+                    zeroOption.oneOnSwitches[row] = 0;
+                    options.push(zeroOption);
+                    
+                    //add the one option that flips all lights connected to that switch
+                    const oneOption = this.clone();
+                    oneOption.oneOnSwitches[row] = 1;
+                    for (var col = 0; col < numLights; col++) {
+                        if (this.oneOnGrid[col][row]) {
+                            //the row-th switch is connected to the col-th light, so toggle that light
+                            oneOption.lights[col] = !oneOption.lights[col];
+                        }
+                    }
+                    options.push(oneOption);
+                }
+            }
+            //if the One On player has run out of switches and it's not a blackout, they can use one of their passes.
+            if (options.length == 0) {
+                //we get to use a pass if it's not a blackout.
+                if (this.rightPasses > 0 && !this.isBlackout()) {
+                    const option = this.clone();
+                    option.rightPasses -= 1;
+                    options.push(option);
+                }
+            }
+            
+        }
+        return options;
+    }
+    
+    /**
+     * Returns whether Right has chosen settings for all of their switches.
+     */
+    ,allRightSwitchesFlipped: function() {
+        const n = this.getNumOneOnSwitches();
+        for (var i = 0; i < n; i++) {
+            if (this.oneOnSwitches[i] == -1) return false;
+        }
+        return true;
+    }
+    
+    /**
+     * Returns the pass option, if one exists.  Returns undefined otherwise.
+     */
+    ,optionFromPass: function() {
+        if (this.allRightSwitchesFlipped() && !this.isBlackout() && this.rightPasses > 0) {
+            const option = this.clone();
+            option.rightPasses -= 1;
+            return option;
+        }
+    }
+        
+    /**
+     * Gets the result of a play.  (This is not a required (inheriting) function.)  It assumes that the play is a legal one and does not validate the parameters.
+     */
+    ,getOption: function(playerId, row, switchOn) {
+        console.log("Getting option: " + playerId + ", " + row + ", " + switchOn);
+        const option = this.clone();
+        const onNumber = switchOn ? 1 : 0;
+        
+        //choose the appropriate grid and switches to modify
+        const switches = playerId == CombinatorialGame.prototype.LEFT ? option.allOffSwitches : option.oneOnSwitches;
+        const grid = playerId == CombinatorialGame.prototype.LEFT ? option.allOffGrid : option.oneOnGrid;
+        switches[row] = onNumber;
+        if (switchOn) {
+            for (var col = 0; col < this.getWidth(); col++) {
+                if (grid[col][row]) {
+                    //the row-th switch is connected to the col-th light, so let's flip it.
+                    option.lights[col] = !option.lights[col];
+                }
+            }
+        }
+        return option;
+    }
+    
+}); //end of Blackout class
+Blackout.prototype.PLAYER_NAMES = ["AllOff", "OneOn"];
+
+
+
+
+
+
+
+
+var InteractiveBlackoutView = Class.create({
+    
+    /**
+     * Constructor.
+     */
+    initialize: function(position) {
+        this.position = position;
+    }
+    
+    /**
+     * Returns the index of the last 1 in a row of a 2-D array indexed first by columns.  Returns a -1 if it's not in there.
+     */
+    ,lastOneIn2D: function(array, rowIndex) {
+        for (var col = array.length - 1; col > -1; col--) {
+            if (array[col][rowIndex] == 1) {
+                return col;
+            }
+        }
+        return col;
+    }
+    
+    /**
+     * Returns the index of the first 1 in an array.
+     */
+    ,firstOne: function(array) {
+        for (var i = 0; i < array.length; i++) {
+            if (array[i] == 1) {
+                return i;
+            }
+        }
+        return i;
+    }
+    
+    /**
+     * Returns the index of the last 1 in an array.
+     */
+    ,lastOne: function(array) {
+        for (var i = array.length - 1; i > -1; i--) {
+            if (array[i] == 1) {
+                return i;
+            }
+        }
+        return i;
+    }
+    
+    /**
+     * Draws the board.
+     */
+    ,draw: function(containerElement, listener) {
+        //clear out the other children of the container element
+        while (containerElement.hasChildNodes()) {
+            containerElement.removeChild(containerElement.firstChild);
+        }
+        var svgNS = "http://www.w3.org/2000/svg";
+        var boardSvg = document.createElementNS(svgNS, "svg");
+        //now add the new board to the container
+        containerElement.appendChild(boardSvg);
+        var boardPixelSize = Math.min(window.innerHeight, window.innerWidth - 200);
+        //var boardPixelSize = 10 + (this.position.sideLength + 4) * 100
+        boardSvg.setAttributeNS(null, "width", boardPixelSize);
+        boardSvg.setAttributeNS(null, "height", boardPixelSize);
+        
+        //calculate the dimensions
+        var width = this.position.getWidth() + 1; //one more for the switches
+        var height = this.position.getHeight() + 1; //one more for the lights
+        
+        //get some dimensions based on the canvas size
+        const padding = 2;
+        var maxBoxWidth = (boardPixelSize - 10) / (width + 1);
+        var maxBoxHeight = (boardPixelSize - 10) / (height + 1);
+        var maxBoxSide = Math.floor(Math.min(maxBoxWidth, maxBoxHeight));
+        console.log("maxBoxSide: " + maxBoxSide);
+        console.log("width: " + width);
+        console.log("height: " + height);
+        
+        const lightColors = ["black", "yellow", "gray"];
+        
+        const switchColors = ["red", "green"];
+        
+        //draw the board
+        //draw the switches along the left hand side
+        var row = 0;
+        //first the All Off player's switches
+        for (;row < this.position.getNumAllOffSwitches(); row++) {
+            if (this.position.allOffSwitches[row] == -1) {
+                var onRect = document.createElementNS(svgNS, "rect");
+                onRect.setAttributeNS(null, "x", padding); 
+                onRect.setAttributeNS(null, "y", padding + (row * maxBoxSide)); 
+                onRect.setAttributeNS(null, "width", maxBoxSide - 2 * padding); 
+                onRect.setAttributeNS(null, "height", Math.floor(maxBoxSide/2) - padding); 
+                onRect.style.stroke = "black";
+                onRect.style.fill = switchColors[1];
+                boardSvg.appendChild(onRect);
+                if (listener != undefined) {
+                    onRect.playerId = CombinatorialGame.prototype.LEFT;
+                    onRect.index = row;
+                    onRect.toggle = true;
+                    var player = listener;
+                    onRect.onclick = function(event) {player.handleClick(event);}
+                }
+                
+                var offRect = document.createElementNS(svgNS, "rect");
+                offRect.setAttributeNS(null, "x", padding); 
+                offRect.setAttributeNS(null, "y", Math.floor((row + .5) * maxBoxSide)); 
+                offRect.setAttributeNS(null, "width", maxBoxSide - 2 * padding); 
+                offRect.setAttributeNS(null, "height", Math.floor(maxBoxSide/2) - padding); 
+                offRect.style.stroke = "black";
+                offRect.style.fill = switchColors[0];
+                boardSvg.appendChild(offRect);
+                if (listener != undefined) {
+                    offRect.playerId = CombinatorialGame.prototype.LEFT;
+                    offRect.index = row;
+                    offRect.toggle = false;
+                    var player = listener;
+                    offRect.onclick = function(event) {player.handleClick(event);}
+                }
+            } else {
+                var playedRect = document.createElementNS(svgNS, "rect");
+                playedRect.setAttributeNS(null, "x", padding);
+                playedRect.setAttributeNS(null, "y", padding + (row * maxBoxSide));
+                playedRect.setAttributeNS(null, "width", maxBoxSide - 2 * padding); 
+                playedRect.setAttributeNS(null, "height", maxBoxSide - 2 * padding); 
+                playedRect.style.stroke = "black";
+                playedRect.style.fill = switchColors[this.position.allOffSwitches[row]];
+                boardSvg.appendChild(playedRect);
+            }
+        }
+        
+        row++; //no switches in the row where the lights are 
+        
+        //now the One On player's switches
+        for (;row < height; row++) {
+            const oneOnSwitchIndex = row - (1 + this.position.getNumAllOffSwitches());
+            if (this.position.oneOnSwitches[oneOnSwitchIndex] == -1) {
+                var onRect = document.createElementNS(svgNS, "rect");
+                onRect.setAttributeNS(null, "x", padding); 
+                onRect.setAttributeNS(null, "y", padding + (row * maxBoxSide)); 
+                onRect.setAttributeNS(null, "width", maxBoxSide - 2 * padding); 
+                onRect.setAttributeNS(null, "height", Math.floor(maxBoxSide/2) - padding); 
+                onRect.style.stroke = "black";
+                onRect.style.fill = switchColors[1];
+                boardSvg.appendChild(onRect);
+                if (listener != undefined) {
+                    onRect.playerId = CombinatorialGame.prototype.RIGHT;
+                    onRect.index = oneOnSwitchIndex;
+                    onRect.toggle = true;
+                    onRect.func = "switch";
+                    var player = listener;
+                    onRect.onclick = function(event) {player.handleClick(event);}
+                }
+                
+                var offRect = document.createElementNS(svgNS, "rect");
+                offRect.setAttributeNS(null, "x", padding); 
+                offRect.setAttributeNS(null, "y", Math.floor((row +  .5) * maxBoxSide)); 
+                offRect.setAttributeNS(null, "width", maxBoxSide - 2 * padding); 
+                offRect.setAttributeNS(null, "height", Math.floor(maxBoxSide/2) - padding); 
+                offRect.style.stroke = "black";
+                offRect.style.fill = switchColors[0];
+                boardSvg.appendChild(offRect);
+                if (listener != undefined) {
+                    offRect.playerId = CombinatorialGame.prototype.RIGHT;
+                    offRect.index = oneOnSwitchIndex;
+                    offRect.toggle = false;
+                    offRect.func = "switch";
+                    var player = listener;
+                    offRect.onclick = function(event) {player.handleClick(event);}
+                }
+            } else {
+                var playedRect = document.createElementNS(svgNS, "rect");
+                playedRect.setAttributeNS(null, "x", padding);
+                playedRect.setAttributeNS(null, "y", padding + (row * maxBoxSide));
+                playedRect.setAttributeNS(null, "width", maxBoxSide - 2 * padding); 
+                playedRect.setAttributeNS(null, "height", maxBoxSide - 2 * padding); 
+                playedRect.style.stroke = "black";
+                playedRect.style.fill = switchColors[this.position.oneOnSwitches[oneOnSwitchIndex]];
+                boardSvg.appendChild(playedRect);
+            }
+        }
+        
+        
+        //now the columns that contain lights
+        for (var col = 1; col < width; col++) {
+            const lightIndex = col - 1;
+            //do the top grid first
+            var row = 0;
+            const rowOfFirstDot = this.firstOne(this.position.allOffGrid[lightIndex]);
+            for (; row < this.position.getNumAllOffSwitches(); row++) {
+                const wireColor = this.position.allOffSwitches[row] == -1 ? "black" : "gray";
+                //draw the wire coming off the switch if it still exists here
+                const columnOfLastDot = 1 + this.lastOneIn2D(this.position.allOffGrid, row);
+                //add the column wire, if we should
+                if (row >= rowOfFirstDot) {
+                    const columnWire = document.createElementNS(svgNS, "line");
+                    columnWire.setAttributeNS(null, "x1", (col + .5) * maxBoxSide);
+                    columnWire.setAttributeNS(null, "x2", (col + .5) * maxBoxSide);
+                    columnWire.setAttributeNS(null, "y1", row * maxBoxSide);
+                    columnWire.setAttributeNS(null, "y2", (row + 1) * maxBoxSide);
+                    columnWire.style.stroke = "black";
+                    if (row == rowOfFirstDot) {
+                        columnWire.setAttributeNS(null, "y1", (row + .5) * maxBoxSide);
+                    }
+                    boardSvg.appendChild(columnWire);
+                }
+                if (col <= columnOfLastDot) {
+                    const wire = document.createElementNS(svgNS, "line");
+                    wire.setAttributeNS(null, "x1", col * maxBoxSide);
+                    wire.setAttributeNS(null, "x2", (col + 1) * maxBoxSide);
+                    wire.setAttributeNS(null, "y1", Math.floor((row + .5) * maxBoxSide));
+                    wire.setAttributeNS(null, "y2", Math.floor((row + .5) * maxBoxSide));
+                    wire.style.stroke = wireColor; //"black";
+                    if (col == columnOfLastDot) {
+                        wire.setAttributeNS(null, "x2", (col + .5) * maxBoxSide);
+                    }
+                    boardSvg.appendChild(wire);
+                }
+                if (this.position.allOffGrid[lightIndex][row]) { 
+                    const dot = document.createElementNS(svgNS, "circle");
+                    dot.setAttributeNS(null, "cx", Math.floor((col + .5) * maxBoxSide));
+                    dot.setAttributeNS(null, "cy", Math.floor((row + .5) * maxBoxSide));
+                    dot.setAttributeNS(null, "r", Math.floor(maxBoxSide/4)); 
+                    dot.style.stroke = wireColor; //"black";
+                    dot.style.fill = wireColor; //"black";
+                    boardSvg.appendChild(dot);
+                }
+            }
+            
+            //now the light, which is just a circle and a wire going through it
+            const lightWires = document.createElementNS(svgNS, "line");
+            lightWires.setAttributeNS(null, "x1", (col + .5) * maxBoxSide);
+            lightWires.setAttributeNS(null, "x2", (col + .5) * maxBoxSide);
+            lightWires.setAttributeNS(null, "y1", row * maxBoxSide);
+            lightWires.setAttributeNS(null, "y2", (row + 1) * maxBoxSide);
+            lightWires.style.stroke = "black";
+            boardSvg.appendChild(lightWires);
+            const light = document.createElementNS(svgNS, "circle");
+            light.setAttributeNS(null, "cx", Math.floor((col + .5) * maxBoxSide));
+            light.setAttributeNS(null, "cy", Math.floor((row + .5) * maxBoxSide));
+            light.setAttributeNS(null, "r", Math.floor(maxBoxSide/2) - padding);
+            light.style.stroke = "black";
+            if (this.position.lights[lightIndex]) {
+                light.style.fill = "yellow";
+            } else {
+                light.style.fill = "black";
+            }
+            boardSvg.appendChild(light);
+            
+            
+            row++;
+            //now the bottom grid
+            const rowOfLastDot = this.lastOne(this.position.oneOnGrid[lightIndex]);
+            for (; row < height; row++) {
+                //draw the wire coming off the switch
+                const oneOnSwitchIndex = row - (1 + this.position.getNumAllOffSwitches());
+                const columnOfLastDot = 1 + this.lastOneIn2D(this.position.oneOnGrid, oneOnSwitchIndex);
+                const wireColor = this.position.oneOnSwitches[oneOnSwitchIndex] == -1 ? "black" : "gray";
+                //add the column wire, if we should
+                if (oneOnSwitchIndex <= rowOfLastDot) {
+                    const columnWire = document.createElementNS(svgNS, "line");
+                    columnWire.setAttributeNS(null, "x1", (col + .5) * maxBoxSide);
+                    columnWire.setAttributeNS(null, "x2", (col + .5) * maxBoxSide);
+                    columnWire.setAttributeNS(null, "y1", row * maxBoxSide);
+                    columnWire.setAttributeNS(null, "y2", (row + 1) * maxBoxSide);
+                    columnWire.style.stroke = "black";
+                    if (oneOnSwitchIndex == rowOfLastDot) {
+                        columnWire.setAttributeNS(null, "y2", (row + .5) * maxBoxSide);
+                    }
+                    boardSvg.appendChild(columnWire);
+                }
+                if (col <= columnOfLastDot) {
+                    const wire = document.createElementNS(svgNS, "line");
+                    wire.setAttributeNS(null, "x1", col * maxBoxSide);
+                    wire.setAttributeNS(null, "x2", (col + 1) * maxBoxSide);
+                    if (col == columnOfLastDot) {
+                        wire.setAttributeNS(null, "x2", (col + .5) * maxBoxSide);
+                    }
+                    wire.setAttributeNS(null, "y1", Math.floor((row + .5) * maxBoxSide));
+                    wire.setAttributeNS(null, "y2", Math.floor((row + .5) * maxBoxSide));
+                    wire.style.stroke = wireColor; //"black";
+                    boardSvg.appendChild(wire);
+                }
+                if (this.position.oneOnGrid[lightIndex][oneOnSwitchIndex]) { 
+                    const dot = document.createElementNS(svgNS, "circle");
+                    dot.setAttributeNS(null, "cx", Math.floor((col + .5) * maxBoxSide));
+                    dot.setAttributeNS(null, "cy", Math.floor((row + .5) * maxBoxSide));
+                    dot.setAttributeNS(null, "r", Math.floor(maxBoxSide/4)); 
+                    dot.style.stroke = wireColor; //"black";
+                    dot.style.fill = wireColor; //"black";
+                    boardSvg.appendChild(dot);
+                }
+            }
+            
+            
+        }
+        //now draw the box for the Right player to click to pass, if they are able to
+        if (this.position.allRightSwitchesFlipped() && this.position.rightPasses > 0) {
+            const canPass = !( this.position.isBlackout() ||  this.position.rightPasses <= 0);
+            const color = !canPass ? "gray" :  "red";
+            const passBox = document.createElementNS(svgNS, "rect");
+            passBox.setAttributeNS(null, "x", maxBoxSide);
+            passBox.setAttributeNS(null, "y", (height) * maxBoxSide);
+            passBox.setAttributeNS(null, "width", 2 * maxBoxSide);
+            passBox.setAttributeNS(null, "height", .8 * maxBoxSide);
+            passBox.style.stroke = color;
+            passBox.style.fill = "white";
+            boardSvg.appendChild(passBox);
+            const textBuffer = Math.ceil(.17 * maxBoxSide);
+            const textElement = document.createElementNS(svgNS, "text");
+            textElement.setAttributeNS(null, "x", maxBoxSide + textBuffer);//+ 20);
+            textElement.setAttributeNS(null, "y", (height + .8) * maxBoxSide - textBuffer );//+ 20);
+            var textSize = Math.ceil(.45 * maxBoxSide);
+            //textElement.setAttributeNS(null, "color", textColor);
+            textElement.style.fill = color;
+            textElement.textContent =  "Pass x" + this.position.rightPasses 
+            if (this.position.isBlackout()) {
+                textElement.textContent = "Blackout!";
+                textSize = Math.ceil(.33 * maxBoxSide);
+            }
+            textElement.setAttributeNS(null, "font-size",  textSize);
+            boardSvg.appendChild(textElement);
+            if (canPass & listener != undefined) {
+                passBox.func = "pass";
+                var player = listener;
+                passBox.onclick = function(event) {player.handleClick(event);}
+                textElement.func = "pass";
+                textElement.onclick = function(event) {player.handleClick(event);}
+            }
+            
+        }
+    }
+
+    /**
+     * Handles the mouse click.
+     */
+    ,getNextPositionFromClick: function(event, currentPlayer, containerElement, player) {
+        if (event.target.func == "pass") {
+            const option = this.position.optionFromPass();
+            player.sendMoveToRef(option);
+            return;
+        }
+        const switchClicked = event.target;
+        const playerId = switchClicked.playerId;
+        if (playerId == currentPlayer) {
+            const index = switchClicked.index;
+            const toggle = switchClicked.toggle;
+            var chosenOption = this.position.getOption(currentPlayer, index, toggle);
+            player.sendMoveToRef(chosenOption);
+        }
+    }
+    
+}); //end of InteractiveBlackoutView class
+
+
+/**
+ * View Factory for Blackout
+ */
+var InteractiveBlackoutViewFactory = Class.create({
+    /**
+     * Constructor
+     */
+    initialize: function() {
+    }
+
+    /**
+     * Returns an interactive view
+     */
+    ,getInteractiveBoard: function(position) {
+        return new InteractiveBlackoutView(position);
+    }
+
+    /**
+     * Returns a view.
+     */
+    ,getView: function(position) {
+        return this.getInteractiveBoard(position);
+    }
+
+}); //end of InteractiveBlackoutViewFactory
+
+/**
+ * Launches a new Blackout game.
+ */
+function newBlackoutGame() {
+    var viewFactory = new InteractiveBlackoutViewFactory();
+    var playDelay = 1000;
+    var playerOptions = getCommonPlayerOptions(viewFactory, playDelay, 1, 5);
+    const numAllOffSwitches = parseInt($('numAllOffSwitches').value);
+    const numLights = parseInt($('numLights').value);
+    const numOneOnSwitches = parseInt($('numOneOnSwitches').value);
+    var controlForm = $('gameOptions');
+    var leftPlayer = parseInt(getSelectedRadioValue(controlForm.elements['leftPlayer']));
+    var rightPlayer =  parseInt(getSelectedRadioValue(controlForm.elements['rightPlayer']));
+    var game = new Blackout(numLights, numAllOffSwitches, numOneOnSwitches);
+    var players = [playerOptions[leftPlayer], playerOptions[rightPlayer]];
+    var ref = new Referee(game, players, viewFactory, "MainGameBoard", $('messageBox'), controlForm);
+}
+
+///////////////////////// End of Blackout
+
+
+
+
+
+
+
+
+
 
 
 ///////////////////////////// Popping Balloons ////////////////////////////////
@@ -2226,6 +2938,2036 @@ function newFlagColoringGame() {
 }
 
 ///////////////////////// End of Flag Coloring
+
+
+
+
+
+///////////////////////////// Gorgons ////////////////////////////////
+
+/**
+ * Game of Gorgons .
+ * 
+ * Grid is represented as:
+ *  - board 2D grid of board contents as strings (columns as first index).  Each element can be either empty ("blank"), blue gorgon ("gorgon blue"), red gorgon ("gorgon red"), stone block ("stone blank"), stone blue gorgon ("stone gorgon blue"), or stone red gorgon ("stone gorgon red").
+ * @author Kyle Burke
+ */
+var Gorgons = Class.create(CombinatorialGame, {
+   
+    /**
+     * Constructor.
+     */
+    initialize: function(size, numBlueGorgons, numRedGorgons) {
+        numRedGorgons = numRedGorgons || numBlueGorgons;
+        this.playerNames = Gorgons.prototype.PLAYER_NAMES;
+        const width = size;
+        const height = size;
+        if (numBlueGorgons < 0 || numRedGorgons < 0) {
+            console.log("ERROR: trying to create a game with negative gorgons!");
+            return;
+        } else if (Math.max(numBlueGorgons, numRedGorgons) > (width + height) / 2) {
+            console.log("ERROR: too many gorgons chosen, so we're going down to " + size + " gorgons per side.");
+        }
+        this.board = [];
+        for (var i = 0; i < width; i++) {
+            const column = [];
+            for (var j = 0; j < height; j++) {
+                column.push("blank");
+            }
+            this.board.push(column);
+        }
+        const evenWidthAbove = width % 2 == 0 ? width : (width + 1);
+        const evenWidthBelow = width % 2 == 0 ? width : (width - 1);
+        for (var i = 0; i < numRedGorgons; i++) {
+            //place a red gorgon
+            var row = Math.floor( (2*i) / width);
+            var column = (2 * i) % evenWidthAbove;// + Math.pow(-1, row);
+            this.board[column][row] = "gorgon red";
+        }
+        for (var i = 0; i < numBlueGorgons; i++) {  
+            //place a blue gorgon
+            row = height - 1 - Math.floor( (2 * i) / evenWidthBelow);
+            column = (2 * i + 1) % evenWidthBelow;
+            this.board[column][row] = "gorgon blue";
+        }
+        const mid = Math.floor((size-1) / 2);
+        const midPlus = Math.ceil((size-1) / 2);
+        this.board[mid][mid] = "stone " + this.board[mid][mid];
+        this.board[mid][midPlus] = "stone " + this.board[mid][midPlus];
+        this.board[midPlus][mid] = "stone " + this.board[midPlus][mid];
+        this.board[midPlus][midPlus] = "stone " + this.board[midPlus][midPlus];
+    }
+    
+    /**
+     * Returns the width of this board.
+     */
+    ,getWidth: function() {
+        return this.board.length;
+    }
+    
+    /**
+     * Returns the height of this board.
+     */
+    ,getHeight: function() {
+       return this.board[0].length;
+    }
+    
+    /**
+     * Returns the number of pieces for a player.
+     */
+    ,getNumGorgons: function(playerId) {
+        var count = 0;
+        const pieceName = "gorgon " + ( playerId == 0 ? "blue" : "red");
+        for (var i = 0; i < this.getWidth(); i++) {
+            for (var j = 0; j < this.getHeight(); j++) {
+                if (this.board[i][j] == pieceName) {
+                    count ++;
+                }
+            }
+        }
+        return count;
+    }
+    
+    /**
+     * Equals!
+     */
+    ,equals: function(other) {
+        if (this.getWidth() != other.getWidth() || this.getHeight() != other.getHeight()) {
+            return false;
+        }
+        for (var i = 0; i < this.getWidth(); i++) {
+            for (var j = 0; j < this.getHeight(); j++) {
+                if (this.board[i][j] != other.board[i][j]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Clone.
+     */
+    ,clone: function() {
+        var clone = new Gorgons(this.getWidth(), 0);
+        clone.board = [];
+        for (var i = 0; i < this.getWidth(); i++) {
+            const col = [];
+            for (var j = 0; j < this.getHeight(); j++) {
+                col.push(this.board[i][j]);
+            }
+            clone.board.push(col);
+        }
+        return clone;
+    }
+    
+    /**
+     * Returns whether two sets of coordinates are equal.
+     */
+    ,coordinatesEquals: function(coordsA, coordsB) {
+        return coordsA[0] == coordsB[0] && coordsA[1] == coordsB[1];
+    }
+    
+    /**
+     * Returns a list of the locations of spaces a gorgon can stone.
+     */
+    ,stoneTilesForGorgon: function(gorgonLoc) {
+        const directions = this.getDirections();
+        const stoneTiles = [];
+        for (var i = 0; i < directions.length; i++) {
+            const direction = directions[i];
+            if (this.canFace(gorgonLoc, direction)) {
+                stoneTiles.push(this.toStone(gorgonLoc, direction));
+            }
+        }
+        return stoneTiles;
+    }
+    
+    /**
+     * Returns the coordinates of the space that would be stoned, [col, row].  Coordinates is a 2-vector.  Direction is a 2-vector where the values are either 0, 1, or -1 in any combination except for [0, 0].
+     */
+    ,toStone: function(source, direction) {
+        var current = source;
+        var next;
+        //console.log("source: " + source);
+        //console.log("direction: " + direction);
+        while(true) {
+            next = [current[0] + direction[0], current[1] + direction[1]];
+            //console.log("current: " + current);
+            //console.log("next: " + next);
+            if (next[0] == -1 || next[0] == this.getWidth() || next[1] == -1 || next[1] == this.getHeight()) {
+                //next is off the board
+                if (this.coordinatesEquals(current,source)) {
+                    //console.log("The gorgon can't stone in this direction!");
+                    return undefined; //we don't want to return the source.  This gorgon can't move in that direction.
+                } else {
+                    return current;
+                }
+            } else {
+                const content = this.board[next[0]][next[1]];
+                if (content.substring(0, 5) == "stone") {
+                    //the next space is a stone.  Return the prior one.
+                    if (this.coordinatesEquals(current, source)) {
+                        return undefined; //not if we're at the same place
+                    } else {
+                        return current;
+                    }
+                } else if (content != "blank") {
+                    return next;
+                }
+            }
+            current = next;
+        }
+        console.log("Shouldn't reach here!  (End of toStone)");
+    }
+    
+    /**
+     * Determines whether a gorgon at a given location [col, row] can turn to the specified direction [col, row].
+     */
+    ,canFace: function(source, direction) {
+        const neighborSpace = [source[0] + direction[0], source[1] + direction[1]];
+        return !(neighborSpace[0] == -1 || neighborSpace[0] == this.getWidth() || neighborSpace[1] == -1 || neighborSpace[1] == this.getHeight() || this.board[neighborSpace[0]][neighborSpace[1]].substring(0,5) == "stone");
+    }
+    
+    /**
+     * Returns the eight possible directions.
+     */
+    ,getDirections: function() {
+        return [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    }
+    
+    /**
+     * Returns the locations of the gorgons for a specified player.
+     */
+    ,getGorgons: function(playerId) {
+        const gorgons = [];
+        const gorgonName = "gorgon " + (playerId == 0 ? "blue" : "red");
+        for (var i = 0; i < this.getWidth(); i++) {
+            for (var j = 0; j < this.getHeight(); j++) {
+                const contents = this.board[i][j];
+                if (contents == gorgonName) {
+                    gorgons.push([i, j]);
+                }
+            }
+        }
+        return gorgons;
+    }
+    
+    /**
+     * Returns the options from a gorgon facing in one direction.
+     */
+    ,getOptionsForGorgonInDirection: function(gorgonLoc, direction) {
+        if (!this.canFace(gorgonLoc, direction)) {
+            return [];
+        }
+        //console.log("gorgonLoc: " + gorgonLoc);
+        //console.log("direction: " + direction);
+        const options = [];
+        const baseWithStone = this.clone();
+        const toStone = baseWithStone.toStone(gorgonLoc, direction);
+        //console.log("toStone: " + toStone);
+        baseWithStone.board[toStone[0]][toStone[1]] = "stone " + baseWithStone.board[toStone[0]][toStone[1]];
+        options.push(baseWithStone); //gorgon doesn't move
+        var moveTo = [gorgonLoc[0] + direction[0], gorgonLoc[1] + direction[1]];
+        while (!this.coordinatesEquals(moveTo, toStone)) {
+            //console.log("moveTo: " + moveTo);
+            const option = baseWithStone.clone();
+            const gorgon = option.board[gorgonLoc[0]][gorgonLoc[1]]; //gorgon's name
+            option.board[gorgonLoc[0]][gorgonLoc[1]] = "blank";
+            option.board[moveTo[0]][moveTo[1]] = gorgon;
+            options.push(option);
+            moveTo = [moveTo[0] + direction[0], moveTo[1] + direction[1]];
+            //console.log("option added!");
+        }
+        return options;
+    }
+    
+    /**
+     * Gets the direction from between two locations.
+     */
+    ,getDirectionFromPoints: function(source, destination) {
+        const difference = [destination[0] - source[0], destination[1] - source[1]];
+        //check for illegal differences
+        if (difference[0] != 0 && difference[1] != 0 && (Math.abs(difference[0]) != Math.abs(difference[1]))) {
+            //illegal combination!
+            return "Nope!";
+        } else {
+            const direction = [];
+            direction.push(difference[0] / (Math.max(1, Math.abs(difference[0]))));
+            direction.push(difference[1] / (Math.max(1, Math.abs(difference[1]))));
+            return direction;
+        }
+    }
+    
+    /**
+     * Gets the options.
+     */
+    ,getOptionsForPlayer: function(playerId) {
+        const gorgons = this.getGorgons(playerId);
+        const options = [];
+        const directions = this.getDirections();
+        for (var i = 0; i < gorgons.length; i++) {
+            const gorgon = gorgons[i];
+            //console.log("i: " + i);
+            for (var j = 0; j < directions.length; j++) {
+                //console.log("j: " + j);
+                const direction = directions[j];
+                if (this.canFace(gorgon, direction)) {
+                    const newOptions = this.getOptionsForGorgonInDirection(gorgon, direction);
+                    for (var k = 0; k < newOptions.length; k++) {
+                        //console.log("k: " + k);
+                        options.push(newOptions[k]);
+                    }
+                }
+            }
+        }
+        return options;
+    }
+    
+    /**
+     * Returns the option for moving a gorgon.  All three parameters are [row, col] cooredinates.
+     */
+    ,getOptionFromMove: function(gorgonSource, newStoneLoc, gorgonDest) {
+        const direction = this.getDirectionFromPoints(gorgonSource, newStoneLoc);
+        console.log("direction: " + direction);
+        if (this.canFace(gorgonSource, direction)) {
+            const option = this.clone();
+            option.board[newStoneLoc[0]][newStoneLoc[1]] = "stone " + option.board[newStoneLoc[0]][newStoneLoc[1]];
+            const gorgonString = option.board[gorgonSource[0]][gorgonSource[1]];
+            option.board[gorgonSource[0]][gorgonSource[1]] = "blank";
+            option.board[gorgonDest[0]][gorgonDest[1]] = gorgonString;
+            return option;
+        } else {
+            return null;
+        }
+    }
+    
+    /**
+     * Returns whether two sets of coordinates are equal.
+     */
+    ,coordinatesEquals: function(coordsA, coordsB) {
+        return coordsA[0] == coordsB[0] && coordsA[1] == coordsB[1];
+    }
+    
+}); //end of Gorgons class
+Gorgons.prototype.PLAYER_NAMES = ["Blue", "Red"];
+
+
+
+
+const InteractiveGorgonsView = Class.create({
+    
+    /**
+     * Constructor.
+     */
+    initialize: function(position) {
+        this.position = position;
+        this.selectedTile = undefined;
+        this.selectedStone = undefined;
+    }
+    
+    /**
+     * Draws the board.
+     */
+    ,draw: function(containerElement, listener) {
+        this.selectedTile = undefined;
+        this.selectedDirection = [0,0];
+        //let's write the board contents out so we can traverse it that way
+        const width = this.position.getWidth();
+        const height = this.position.getHeight();
+        for (var col = 0; col < this.position.size; col++) {
+            const column = [];
+            for (var row = 0; row < this.position.size; row++) {
+                column.push("");
+            }
+            contents.push(column);
+        }
+            
+        //clear out the other children of the container element
+        while (containerElement.hasChildNodes()) {
+            containerElement.removeChild(containerElement.firstChild);
+        }
+        var svgNS = "http://www.w3.org/2000/svg";
+        var boardSvg = document.createElementNS(svgNS, "svg");
+        //now add the new board to the container
+        containerElement.appendChild(boardSvg);
+        var boardWidth = Math.min(getAvailableHorizontalPixels(containerElement), window.innerWidth - 200);
+        var boardPixelSize = Math.min(window.innerHeight, boardWidth);
+        //var boardPixelSize = 10 + (this.position.sideLength + 4) * 100
+        boardSvg.setAttributeNS(null, "width", boardPixelSize);
+        boardSvg.setAttributeNS(null, "height", boardPixelSize);
+        
+        //get some dimensions based on the canvas size
+        var maxCircleWidth = (boardPixelSize - 10) / width;
+        var maxCircleHeight = (boardPixelSize - 10) / (height + 2);
+        var maxDiameter = Math.min(maxCircleWidth, maxCircleHeight);
+        var padPercentage = .2;
+        var boxSide = maxDiameter;
+        var nodeRadius = Math.floor(.5 * maxDiameter * (1-padPercentage));
+        var nodePadding = Math.floor(maxDiameter * padPercentage);
+        
+        //draw a gray frame around everything
+        var frame = document.createElementNS(svgNS, "rect");
+        frame.setAttributeNS(null, "x", 5);
+        frame.setAttributeNS(null, "y", 5);
+        frame.setAttributeNS(null, "width", width * boxSide);
+        frame.setAttributeNS(null, "height", height * boxSide);
+        frame.style.strokeWidth = 4;
+        frame.style.stroke = "gray";
+        boardSvg.appendChild(frame);
+        
+        //draw the board
+        for (var colIndex = 0; colIndex < width; colIndex++) {
+            //draw the boxes in this column
+            for (var rowIndex = 0; rowIndex < height; rowIndex ++) {
+                var text = "";
+                var square = document.createElementNS(svgNS, "rect");
+                var x = 5 + Math.floor((colIndex) * boxSide);
+                var y = 5 + Math.floor((rowIndex) * boxSide);
+                square.setAttributeNS(null, "x", x);
+                square.setAttributeNS(null, "y", y);
+                square.setAttributeNS(null, "width", boxSide+1);
+                square.setAttributeNS(null, "height", boxSide+1);
+                square.style.stroke = "black";
+                square.style.strokeWith = 2;
+                square.style.fill = "white";
+                var content = this.position.board[colIndex][rowIndex];
+                if (content.includes("stone")) {
+                    square.style.fill = "gray";
+                }
+                if (content.includes("gorgon")) {
+                    text = "G";
+                    //text = "￼￼￼🐍"; //this is a green snake
+                }
+                const textColor = (content.includes("blue")) ? "blue" : "red";
+                
+                if (listener != undefined) {
+                    var player = listener;
+                    square.popType = "single";
+                    square.column = colIndex;
+                    square.row = rowIndex;
+                    square.box = square; // so the text and this can both refer to the square itself
+                    square.onclick = function(event) {player.handleClick(event);}
+                    square.text = text;
+                    square.color = textColor;
+                }
+                boardSvg.appendChild(square);
+                
+                if (text != "") {
+                    const textBuffer = Math.ceil(.17 * boxSide);
+                    const textElement = document.createElementNS(svgNS, "text");
+                    textElement.setAttributeNS(null, "x", x + textBuffer);//+ 20);
+                    textElement.setAttributeNS(null, "y", y + boxSide - textBuffer );//+ 20);
+                    const textSize = Math.ceil(.8 * boxSide);
+                    textElement.setAttributeNS(null, "font-size",  textSize);
+                    //textElement.setAttributeNS(null, "color", textColor);
+                    textElement.style.fill = textColor;
+                        
+                    textElement.textContent = text;
+                    textElement.column = colIndex;
+                    textElement.row = rowIndex;
+                    textElement.box = square;
+                    if (listener != undefined) {
+                        var player = listener;
+                        square.popType = "single";
+                        square.column = colIndex;
+                        square.row = rowIndex;
+                        square.box = square; // so the text and this can both refer to the square itself
+                        square.onclick = function(event) {player.handleClick(event);}
+                        textElement.onclick = function(event) {player.handleClick(event);}
+                    }
+                    boardSvg.appendChild(textElement);
+                }
+            }
+        }
+        this.graphics = boardSvg;
+    }
+
+    /**
+     * Selects a tile.
+     */
+    ,selectTile: function(tile) {
+        this.selectedTile = tile;
+        this.selectedTile.oldColor = this.selectedTile.style.fill;
+        this.selectedTile.style.fill = "yellow";
+        this.addXs();
+    }
+
+    /**
+     * Deselect tile.
+     */
+    ,deselectTile: function() {
+        this.selectedTile.style.fill = this.selectedTile.oldColor;
+        this.selectedTile = undefined;
+        this.removeXs();
+    }
+    
+    /**
+     * Draws the Xs for places that can be stoned.
+     */
+    ,addXs: function() {
+        //now lots of code to highlight where you can stone things
+        this.stoneOptionXs = [];
+        const boardPixelWidth = this.graphics.getAttributeNS(null, "width");
+        const boardPixelHeight = this.graphics.getAttributeNS(null, "height");
+        const width = this.position.getWidth();
+        const height = this.position.getHeight();
+        var maxCircleWidth = (boardPixelWidth - 10) / width;
+        var maxCircleHeight = (boardPixelHeight - 10) / (height + 2);
+        var maxDiameter = Math.min(maxCircleWidth, maxCircleHeight);
+        const boxSide = maxDiameter;
+        //const boxSide = boardPixelWidth / width;
+        var svgNS = "http://www.w3.org/2000/svg";
+        //console.log("boardPixelSize: " + boardPixelSize);
+        const gorgonLoc = [this.selectedTile.box.column, this.selectedTile.box.row];
+        const locations = this.position.stoneTilesForGorgon(gorgonLoc);
+        for (var i = 0; i < locations.length; i++) {
+            const location = locations[i];
+            //console.log("stone location: " + location);
+            const x = 5 + Math.floor(location[0] * boxSide);
+            const y = 5 + Math.floor(location[1] * boxSide);
+            const topLeft = [x, y];
+            const topRight = [x + boxSide, y];
+            const bottomLeft = [x, y + boxSide];
+            const bottomRight = [x + boxSide, y + boxSide];
+            const textPadding = 10;
+            const line1 = document.createElementNS(svgNS, "line");
+            line1.setAttributeNS(null, "x1", topLeft[0]);
+            line1.setAttributeNS(null, "y1", topLeft[1]);
+            line1.setAttributeNS(null, "x2", bottomRight[0]);
+            line1.setAttributeNS(null, "y2", bottomRight[1]);
+            line1.style.stroke = "black";
+            line1.style.strokeWidth = "2";
+            line1.height = "" + boxSide;
+            line1.width = "" + boxSide;
+            this.graphics.appendChild(line1);
+            this.stoneOptionXs.push(line1);
+            const line2 = document.createElementNS(svgNS, "line");
+            line2.setAttributeNS(null, "x1", topRight[0]);
+            line2.setAttributeNS(null, "y1", topRight[1]);
+            line2.setAttributeNS(null, "x2", bottomLeft[0]);
+            line2.setAttributeNS(null, "y2", bottomLeft[1]);
+            line2.style.stroke = "black";
+            line2.style.strokeWidth = "2";
+            line2.height = "" + boxSide;
+            line2.width = "" + boxSide;
+            this.graphics.appendChild(line2);
+            this.stoneOptionXs.push(line2);
+            /*
+            const textElement = document.createElementNS(svgNS, "text");
+            textElement.setAttributeNS(null, "x", x + textPadding);
+            textElement.setAttributeNS(null, "y", y + boxSide - textPadding );
+            const textSize = Math.ceil(1 * boxSide);
+            textElement.setAttributeNS(null, "font-size",  textSize);
+            textElement.style.fill = "black";
+            textElement.textContent = "X";
+            this.graphics.appendChild(textElement);
+            this.stoneOptionXs.push(textElement);
+            */
+        }
+        
+    }
+    
+    /**
+     * Removes all the Xs for the tiles to possibly stone.
+     */
+    ,removeXs: function() {
+        for (var i = 0; i < this.stoneOptionXs.length; i++) {
+            this.graphics.removeChild(this.stoneOptionXs[i]);
+        }
+        this.stoneOptionXs = [];
+    }
+    
+    /**
+     * Selects a future stoned tile.
+     */
+    ,selectTileToStone: function(tile) {
+        this.selectedStone = tile;
+        this.selectedStone.oldColor = this.selectedStone.style.fill;
+        this.selectedStone.style.fill = "black";
+        this.removeXs();
+    }
+    
+    /**
+     * Deselects the tile to stone.
+     */
+    ,deselectTileToStone: function() {
+        this.selectedStone.style.fill = this.selectedStone.oldColor;
+        this.selectedStone = undefined;
+        this.addXs();
+    }
+
+    ,/**
+     * Handles a mouse click.
+     */
+    getNextPositionFromClick: function(event, currentPlayer, containerElement) {
+        var clickedTile = event.target.box; //this will be a tile
+        //console.log("clickedTile: " + clickedTile);
+        //console.log("currentPlayer: " + currentPlayer);
+        if (this.selectedTile === undefined) {
+            //console.log("First case!");
+            const text = clickedTile.text;
+            const gorgonPlayer = clickedTile.color == "blue" ? 0 : 1;
+            if (text == "G" && clickedTile.style.fill != "gray" && gorgonPlayer == currentPlayer) {
+                this.selectTile(clickedTile);
+                
+            }
+            return null;
+        } else if (this.selectedStone == undefined) {
+            //console.log("Second case!");
+            //time to select the tile we're going to stone.
+            const gorgonTile = [this.selectedTile.column, this.selectedTile.row];
+            const selectedStoneTile = [clickedTile.column, clickedTile.row];
+            if (this.selectedTile == clickedTile) {
+                this.deselectTile();
+                return null;
+            }
+            const possibleStoneLocations = this.position.stoneTilesForGorgon(gorgonTile);
+            //console.log("possibleStoneLocations: " + possibleStoneLocations);
+            //console.log("selectedStoneTile: " + selectedStoneTile);
+            var stoneInStoneTiles = false;
+            for (var i = 0; i < possibleStoneLocations.length; i++) {
+                const possibleStone = possibleStoneLocations[i];
+                //console.log("possibleStone: " + possibleStone);
+                if (this.position.coordinatesEquals(selectedStoneTile, possibleStone)) {
+                    stoneInStoneTiles = true;
+                    break;
+                }
+            }
+            //console.log("stoneInStoneTiles? " + stoneInStoneTiles);
+            if (stoneInStoneTiles) {
+                this.selectTileToStone(clickedTile);
+            }
+            return null;
+        } else {
+            //console.log("Third case!");
+            //now it's time to pick where to go
+            //if they click on the stone, then deselect the stone.
+            if (clickedTile == this.selectedStone) {
+                this.deselectTileToStone();
+                return null;
+            }
+            const gorgonTile = [this.selectedTile.column, this.selectedTile.row];
+            const stoneTile = [this.selectedStone.column, this.selectedStone.row];
+            const moveToTile = [clickedTile.column, clickedTile.row];
+            //console.log("gorgonTile: " + gorgonTile);
+            //console.log("stoneTile: " + stoneTile);
+            //console.log("moveToTile: " + moveToTile);
+            const option = this.position.getOptionFromMove(gorgonTile, stoneTile, moveToTile);
+            //console.log("option: " + option);
+            this.deselectTileToStone();
+            this.deselectTile();
+            return option;
+        }
+    }
+    
+}); //end of InteractiveGorgonsView class
+
+/**
+ * View Factory for Gorgons
+ */
+var InteractiveGorgonsViewFactory = Class.create({
+    /**
+     * Constructor
+     */
+    initialize: function() {
+    }
+
+    /**
+     * Returns an interactive view
+     */
+    ,getInteractiveBoard: function(position) {
+        return new InteractiveGorgonsView(position);
+    }
+
+    /**
+     * Returns a view.
+     */
+    ,getView: function(position) {
+        return this.getInteractiveBoard(position);
+    }
+
+}); //end of InteractiveGorgonsViewFactory
+
+/**
+ * Launches a new ForcedCaptureHnefatafl game.
+ */
+function newGorgonsGame() {
+    var viewFactory = new InteractiveGorgonsViewFactory();
+    var playDelay = 1000;
+    var playerOptions = getCommonPlayerOptions(viewFactory, playDelay, 1, 5);
+    var size = parseInt($('boardSize').value);
+    var numBlueGorgons = parseInt($('numBluePieces').value);
+    var numRedGorgons = parseInt($('numRedPieces').value);
+    var controlForm = $('gameOptions');
+    var leftPlayer = parseInt(getSelectedRadioValue(controlForm.elements['leftPlayer']));
+    var rightPlayer =  parseInt(getSelectedRadioValue(controlForm.elements['rightPlayer']));
+    var game = new Gorgons(size, numBlueGorgons, numRedGorgons);
+    var players = [playerOptions[leftPlayer], playerOptions[rightPlayer]];
+    var ref = new Referee(game, players, viewFactory, "MainGameBoard", $('messageBox'), controlForm);
+}
+
+///////////////////////// End of Gorgons
+
+
+
+
+
+
+///////////////////////////// Hnefatafl ////////////////////////////////
+
+/**
+ * Forced-Capture Hnefatafl.
+ * 
+ * Grid is represented as:
+ *  - Single size that represents the number of squares on a side (must be odd).
+ *  - Location (x,y) of the King.
+ *  - List of defenders' locations.
+ *  - List of attackers' locations.
+ * @author Kyle Burke
+ */
+//var FlagColoring = Class.create(CombinatorialGame, {
+var ForcedCaptureHnefatafl = Class.create(CombinatorialGame, {
+   
+    /**
+     * Constructor.
+     */
+    initialize: function(size, numDefenders) {
+        if (size % 2 != 1) {
+            console.log("ERROR: the game doesn't have an odd size!  size: " + size);
+            return;
+        } else if (numDefenders % 4 != 0) {
+            console.log("ERROR: the number of defenders needs to be a multiple of four!  numDefenders: " + numDefenders);
+            return;
+        }
+        this.size = size;
+        const mid = (size - 1)/2;
+        this.king = [mid, mid];
+        const numAttackers = 2 * numDefenders;
+        const numAttackersOnSide = numDefenders/2;
+        //place the attackers
+        this.attackers = [];
+        var attackersLeftOnSide = numAttackersOnSide;
+        var row;
+        for  (row = 0; attackersLeftOnSide > 0; row++) {
+            //size-4 is used because attackers cannot go in the havens and no starting positions contain the spaces next to them.
+            //The other number is the largest odd number less than the number of attackers on one side
+            var attackersInRow = Math.min(2 * (Math.ceil(attackersLeftOnSide/2))-1, size - Math.max(4, 2 * row));
+            if (attackersInRow <= 0) {
+                console.log("The number of attackers in the row is zero!  row: " + row + "  attackersLeftOnSide: " + attackersLeftOnSide + "  attackersInRow: " + attackersInRow);
+            }
+            //attacker in middle of left quadrant
+            this.attackers.push([row, mid]);
+            //right quadrant
+            this.attackers.push([size - row-1, mid]);
+            //top quadrant
+            this.attackers.push([mid, row]);
+            //bottom quadrant
+            this.attackers.push([mid, size-row-1]);
+            for (var i = 1; i < attackersInRow; i+=2) {
+                const offset = Math.ceil(i/2);
+                //attackers in left quadrant
+                this.attackers.push([row, mid + offset]);
+                this.attackers.push([row, mid - offset]);
+                //right quadrant
+                this.attackers.push([size - row-1, mid + offset]);
+                this.attackers.push([size - row-1, mid - offset]);
+                //top quadrant
+                this.attackers.push([mid + offset, row]);
+                this.attackers.push([mid - offset, row]);
+                //bottom quadrant
+                this.attackers.push([mid + offset, size - row-1]);
+                this.attackers.push([mid - offset, size - row-1]);
+            }
+            attackersLeftOnSide -= attackersInRow;
+        }
+        
+        //row is now the first row (moving up from the throne) that doesn't have attackers.  (Is that correct?)
+        const minRow = row;
+        
+        //now do the defenders
+        this.defenders = [];
+        //var defenderRowsLeft = mid-row;
+        //console.log("defenderRowsLeft: " + defenderRowsLeft);
+        var defendersLeftOnSide = numDefenders/4;
+        //console.log("defendersLeftOnSide: " + defendersLeftOnSide);
+        var defenderRowMin = 1; //increases by 2 each time so we have at most a square.
+        var defendersRowMax = 2; //increases by 1 each time.
+        for (row = mid - 1; defendersLeftOnSide > 0; row--) {
+            if (row < minRow) {
+                console.log("There isn't enough space to place all the defenders!");
+                break;
+            }
+            //in each iteration, put defenders in the given row, then do the same on all sides.
+            const defenderRowsLeft = row + 1 - minRow;
+            var defendersInRow = defenderRowMin;
+            if (defenderRowsLeft == 1) {
+                //only one side left, so place all the pieces
+                defendersInRow = Math.min(defendersRowMax, defendersLeftOnSide);
+            } else if (defendersLeftOnSide >= defenderRowsLeft * defendersRowMax) {
+                //we want to place as many as possible
+                defendersInRow = defendersRowMax;
+            } else {
+                defendersInRow = Math.min(defendersRowMax, Math.ceil(defendersLeftOnSide / defenderRowsLeft));
+            }
+            //const avgDefendersInRow = defendersLeftOnSide / defenderRowsLeft;
+            //console.log("avgDefendersInRow: " + avgDefendersInRow);
+            if (defenderRowsLeft <= 2) {
+                defendersInRow = Math.min(defendersRowMax, Math.ceil(defendersLeftOnSide / defenderRowsLeft));
+            } else {
+                defendersInRow = Math.min(defendersRowMax, Math.ceil(defendersLeftOnSide / defenderRowsLeft)) + 1;
+            }
+            //defendersInRow = Math.min(defendersRowMax, Math.ceil(defendersLeftOnSide / defenderRowsLeft));
+            //const maxDefendersInSquare = Math.pow(2 * (defenderRowsLeft - 1) + 1, 2) - 1;
+            //var thisRowMin = Math.max(defenderRowMin, defendersLeftOnSide - maxDefendersInSquare/4);
+            //const defendersInRow = Math.min(defendersLeftOnSide, thisRowMin); //the actual min 
+            
+            const parity = (defendersInRow + (mid - row)) % 2;
+            //if it's in the middle, place it
+            if (parity == 1) {
+                //middle defender in left quadrant
+                this.defenders.push([row, mid]);
+                //right quadrant
+                this.defenders.push([size - 1 - row, mid]);
+                //top quadrant
+                this.defenders.push([mid, row]);
+                //bottom quadrant
+                this.defenders.push([mid, size - 1 - row]);
+            }
+            console.log("parity:"+ parity + "  defendersInRow: " + defendersInRow);
+            for (var i = parity; i < defendersInRow; i+=1) {
+                console.log("i:" + i);
+                const offset = Math.ceil(i/2);
+                //defenders in left quadrant
+                this.defenders.push([row, mid + (Math.pow(-1, i+1) * offset)]);
+                //this.defenders.push([row, mid - offset]); //TODO: this one maybe shouldn't be here.  if i = defendersInRow-1. Right???
+                //right quadrant
+                //this.defenders.push([size - 1 - row, mid + offset]);
+                this.defenders.push([size - 1 - row, mid - (Math.pow(-1, i+1) * offset)]); //TODO: this one maybe shouldn't be here.  if i = defendersInRow-1. Right???
+                //top quadrant
+                //this.defenders.push([mid + (Math.pow(-1, i+1) * offset), row]);
+                this.defenders.push([mid - (Math.pow(-1, i+1) * offset), row]); //TODO: this one maybe shouldn't be here.  if i = defendersInRow-1. Right???
+                //bottom quadrant
+                this.defenders.push([mid + (Math.pow(-1, i+1) * offset), size - 1 - row]);
+                //this.defenders.push([mid - (Math.pow(-1, i+1) * offset), size - 1 - row]); //TODO: this one maybe shouldn't be here.  if i = defendersInRow-1. Right???
+                
+            }
+            defendersLeftOnSide -= defendersInRow;
+            defendersRowMax += 1;
+            //defenderRowMin += 2;
+        }
+        
+        this.attackers.sort();
+        this.defenders.sort();
+        
+        
+        this.playerNames = ["Attackers", "Defenders"];
+    }
+    
+    /**
+     * Returns the width of this board.
+     */
+    ,getWidth: function() {
+        return this.size;
+    }
+    
+    /**
+     * Returns the height of this board.
+     */
+    ,getHeight: function() {
+       return this.size;
+    }
+    
+    /**
+     * Returns the number of pieces in this game.
+     */
+    ,getNumPieces: function() {
+        var numPieces = this.attackers.length + this.defenders.length;
+        if (this.king[0] != -1) {
+            numPieces++;
+        }
+        return numPieces;
+    }
+    
+    /**
+     * Equals!
+     */
+    ,equals: function(other) {
+        //check that the dimensions match
+        if (this.size != other.size || this.king[0] != other.king[0] || this.king[1] != other.king[1] || this.defenders.length != other.defenders.length || this.attackers.length != other.attackers.length) {
+            return false;
+        }
+        
+        //the lists of attackers and defenders need to remain sorted, so we can just traverse them to check equality.  Sadly, we can't just use array.equals.  
+        for (var i = 0; i < this.attackers.length; i++) {
+            if (this.attackers[i][0] != other.attackers[i][0] || this.attackers[i][1] != other.attackers[i][1]) {
+                return false;
+            }
+        }
+        for (var i = 0; i < this.defenders.length; i++) {
+            if (this.defenders[i][0] != other.defenders[i][0] || this.defenders[i][1] != other.defenders[i][1]) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Clone.
+     */
+    ,clone: function() {
+        var other = new ForcedCaptureHnefatafl(this.size, 0);
+        other.king = this.king;
+        other.attackers = [];
+        for (var i = 0; i < this.attackers.length; i++) {
+            const attacker = this.attackers[i];
+            other.attackers.push([attacker[0], attacker[1]]);
+        }
+        other.defenders = [];
+        for (var i = 0; i < this.defenders.length; i++) {
+            const defender = this.defenders[i];
+            other.defenders.push([defender[0], defender[1]]);
+        }
+        return other;
+    }
+    
+    /**
+     * Returns whether there's nothing but space between two pieces (and that the pieces are lined up).  kingToMove is a boolean that explains whether the king is the one to move.
+     */
+    ,clearBetween: function(startCol, startRow, endCol, endRow, includeEnd) {
+        if (includeEnd === undefined) {
+            includeEnd = false;
+        }
+        if (includeEnd) {
+            const actualEnd = [endCol, endRow];
+            if (startCol == endCol) {
+                if (startRow > endRow) {
+                    actualEnd[1] = endRow-1;
+                } else if (startRow < endRow) {
+                    actualEnd[1] = endRow + 1;
+                } else {
+                    return false;
+                }
+            } else if (startRow == endRow) {
+                if (startCol > endCol) {
+                    actualEnd[0] = endCol - 1;
+                } else if (startCol < endCol) {
+                    actualEnd[0] = endCol + 1;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+            return this.clearBetween(startCol, startRow, actualEnd[0], actualEnd[1], false);
+        }
+        const kingToMove = startCol == this.king[0] && startRow == this.king[1];
+        const mid = (this.size - 1)/2;
+        if (startRow == endRow) {
+            const lowerCol = Math.min(startCol, endCol);
+            const upperCol = Math.max(startCol, endCol);
+            if ((!kingToMove) && startRow == mid && lowerCol < mid && upperCol > mid) {
+                //throne is in the way 
+                return false;
+            }
+            if (upperCol - lowerCol <= 1) {
+                return false; //pieces are adjacent; can't move
+            }
+            if (this.king[1] == startRow && this.king[0] < upperCol && this.king[0] > lowerCol) {
+                return false; //king is between
+            }
+            for (var i = 0; i < this.attackers.length; i++) {
+                var attacker = this.attackers[i];
+                if (attacker[1] == startRow && attacker[0] < upperCol && attacker[0] > lowerCol) {
+                    return false;
+                }
+            }
+            for (var i = 0; i < this.defenders.length; i++) {
+                var defender = this.defenders[i];
+                if (defender[1] == startRow && defender[0] < upperCol && defender[0] > lowerCol) {
+                    return false;
+                }
+            }
+        } else if (startCol == endCol) {
+            const lowerRow = Math.min(startRow, endRow);
+            const upperRow = Math.max(startRow, endRow);
+            if ((!kingToMove) && startCol == mid && lowerRow < mid && upperRow > mid) {
+                //throne is in the way. 
+                return false;
+            }
+            if (upperRow - lowerRow <= 1) {
+                return false; //pieces are adjacent; can't move
+            }
+            if (this.king[0] == startCol && this.king[1] < upperRow && this.king[1] > lowerRow) {
+                return false; //king is between
+            }
+            for (var i = 0; i < this.attackers.length; i++) {
+                var piece = this.attackers[i];
+                if (piece[0] == startCol && piece[1] < upperRow && piece[1] > lowerRow) {
+                    return false; //attacker piece between
+                }
+            }
+            for (var i = 0; i < this.defenders.length; i++) {
+                var piece = this.defenders[i];
+                if (piece[0] == startCol && piece[1] < upperRow && piece[1] > lowerRow) {
+                    return false; //defender piece between
+                }
+            }
+        } else {
+            return false; //they aren't even lined up together.
+        }
+        return true;
+    }
+    
+    /**
+     * Removes a piece from the board.  The playerId is the owner of the piece.
+     */
+    ,removePieceAt: function(coords, playerId) {
+        //first check for the king
+        if (playerId == 1 && this.coordinatesEquals(coords, this.king)) {
+            this.king = [-1, -1];
+        } else {
+            const pieces = playerId == 0 ? this.attackers : this.defenders;
+            var removed = false;
+            for (var i = 0; i < pieces.length; i++) {
+                if (this.coordinatesEquals(coords, pieces[i])) {
+                    pieces.splice(i, 1);
+                    removed = true;
+                    break;
+                }
+            }
+            if (!removed) {
+                throw new Error("Didn't remove a piece!  coords: " + coords); 
+            }
+        }
+    }
+    
+    /**
+     * Returns whether there is a piece for the given player at the specified index.
+     */
+    ,hasPieceForPlayer: function(coords, playerId) {
+        if (playerId == 1 && this.coordinatesEquals(coords, this.king)) {
+            return true;
+        }
+        const pieces = playerId == 0 ? this.attackers : this.defenders;
+        for (var i = 0; i < pieces.length; i++) {
+            if (this.coordinatesEquals(coords, pieces[i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Returns whether the specified piece is moveable for the given player.
+     */
+    ,isMoveablePiece: function(coords, playerId) {
+        //first check whether there's a piece for that player at that position
+        if (!this.hasPieceForPlayer(coords, playerId)) {
+            return false;
+        }
+        const options = this.getOptionsForPlayer(playerId);
+        for (var i = 0; i < options.length; i++) {
+            const option = options[i];
+            if (!option.hasPieceForPlayer(coords, playerId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * Gets the options.
+     */
+    ,getOptionsForPlayer: function(playerId) {
+        if (this.isGameOver()) {
+            return [];
+        }
+        const captureOptions = [];
+        const nonCaptureOptions = [];
+        const mine = playerId == 0 ? this.attackers : this.defenders;
+        var numMine = mine.length;
+        if (playerId == 1) {
+            numMine ++; //one more for the king
+        }
+        for (var i = 0; i < numMine; i++) {
+            var piece;
+            var isKing;
+            if (i == mine.length) { //and it must be the defenders player
+                piece = this.king;
+                isKing = true;
+            } else {
+                piece = mine[i];
+                isKing = false;
+            }
+            var col = piece[0];
+            var row = piece[1];
+            //look above
+            for (row -= 1; row >= 0; row --) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    this.addOption(piece, [col, row], playerId, captureOptions, nonCaptureOptions);
+                    //options.push(this.getOption(i, col, row, playerId));
+                } else {
+                    break;
+                }
+            }
+            //look below
+            for (row = piece[1] + 1; row < this.size; row++) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    this.addOption(piece, [col, row], playerId, captureOptions, nonCaptureOptions);
+                    //options.push(this.getOption(i, col, row, playerId));
+                } else {
+                    break;
+                }
+            }
+            //look left
+            row = piece[1]; //reset the row
+            for (col --; col >= 0; col --) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    this.addOption(piece, [col, row], playerId, captureOptions, nonCaptureOptions);
+                    //options.push(this.getOption(i, col, row, playerId));
+                } else {
+                    break;
+                }
+            }
+            //look right
+            for (col = piece[0]+1; col < this.size; col++) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    this.addOption(piece, [col, row], playerId, captureOptions, nonCaptureOptions);
+                    //options.push(this.getOption(i, col, row, playerId));
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        if (captureOptions.length > 0) {
+            console.log("There are capture moves.");
+            return captureOptions;
+        } else {
+            console.log("No capture moves.");
+            return nonCaptureOptions;
+        }
+    }
+    
+    /**
+     * Adds an option to the appropriate list.
+     */
+    ,addOption: function(source, destination, playerId, captureOptions, nonCaptureOptions) {
+        const option = this.getOptionFromMove(source, destination, playerId);
+        if (this.isCaptureMove(source, destination, playerId)) {
+            captureOptions.push(option);
+        } else {
+            nonCaptureOptions.push(option);
+        }
+    }
+    
+    /**
+     * Returns an option from a move.
+     */
+    ,getOptionFromMove: function(source, destination, playerId) {
+        //check whether the piece can legally move 
+        if (!this.clearBetween(source[0], source[1], destination[0], destination[1], true)) {
+            return this; //failed move
+        }
+        const option = this.clone();
+        if (option.isCaptureMove(source, destination, playerId)) {
+            //we need to remove all of the victims 
+            const victimsAndAnvils = option.getVictimAndAnvilsCoordinates(source, destination);
+            for (var i = 0; i < victimsAndAnvils.length; i++) {
+                const victimSpace = victimsAndAnvils[i][0];
+                const anvilSpace = victimsAndAnvils[i][1];
+                if (option.containsVictim(victimSpace, playerId) && option.containsAnvil(anvilSpace, playerId)) {
+                    option.removePieceAt(victimSpace, 1 - playerId);
+                }
+            }
+        }
+        
+        //now move the piece that shifted
+        if (playerId == 1 && option.coordinatesEquals(option.king, source)) {
+            option.king = destination;
+        } else {
+            const pieces = playerId == 0 ? option.attackers : option.defenders;
+            for (var i = 0; i < pieces.length; i++) {
+                const piece = pieces[i];
+                if (option.coordinatesEquals(piece, source)) {
+                    pieces[i] = destination;
+                }
+            }
+            pieces.sort();
+        }
+        return option;
+        
+    }
+    
+    /**
+     * Returns whether there's a capture move available with a hammer and an anvil.  (Assumes that the anvil is a valid anvil.)  
+     */
+    ,isCaptureMove: function(source, destination, playerId) {
+        if (!this.clearBetween(source[0], source[1], destination[0], destination[1], true)) {
+            return false;
+        }
+        const victimsAndAnvils = this.getVictimAndAnvilsCoordinates(source, destination);
+        for (var i = 0; i < victimsAndAnvils.length; i++) {
+            const victimSpace = victimsAndAnvils[i][0];
+            const anvilSpace = victimsAndAnvils[i][1];
+            if (this.containsVictim(victimSpace, playerId) && this.containsAnvil(anvilSpace, playerId)) {
+                return true;
+            }
+        }
+        //now check whether the king is safe.  (That counts!)
+        if (this.coordinatesEquals(source, this.king)) {
+            const last = this.size - 1;
+            return (this.coordinatesEquals(destination, [0,0]) || this.coordinatesEquals(destination, [0, last]) || this.coordinatesEquals(destination, [last, 0]) || this.coordinatesEquals(destination, [last, last]));
+        }
+        return false;
+        
+    }
+    
+    
+    /**
+     * Determines whether a player has a capturing move.
+     */
+    ,hasCaptureMove: function(playerId) {
+        if (this.isGameOver()) {
+            return false;
+        }
+        const mine = playerId == 0 ? this.attackers : this.defenders;
+        var numMine = mine.length;
+        if (playerId == 1) {
+            numMine ++; //one more for the king
+        }
+        for (var i = 0; i < numMine; i++) {
+            var piece;
+            var isKing;
+            if (i == mine.length) { //and it must be the defenders player
+                piece = this.king;
+                isKing = true;
+            } else {
+                piece = mine[i];
+                isKing = false;
+            }
+            var col = piece[0];
+            var row = piece[1];
+            //look above
+            for (row -= 1; row >= 0; row --) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    if (this.isCaptureMove(piece, [col, row], playerId)) {
+                        return true;
+                    }
+                } else {
+                    break;
+                }
+            }
+            //look below
+            for (row = piece[1] + 1; row < this.size; row++) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    if (this.isCaptureMove(piece, [col, row], playerId)) {
+                        return true;
+                    }
+                } else {
+                    break;
+                }
+            }
+            //look left
+            row = piece[1]; //reset the row
+            for (col --; col >= 0; col --) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    if (this.isCaptureMove(piece, [col, row], playerId)) {
+                        return true;
+                    }
+                } else {
+                    break;
+                }
+            }
+            //look right
+            for (col = piece[0]+1; col < this.size; col++) {
+                if (this.canMoveThrough([col, row], isKing)) {
+                    if (this.isCaptureMove(piece, [col, row], playerId)) {
+                        return true;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+        
+        return false;
+        /*
+        const mine = playerId == 0 ? this.attackers : this.defenders;
+        var numMine = mine.length;
+        if (playerId == 1) {
+            numMine ++; //one more for the king
+        }
+        for (var i = 0; i < numMine; i++) {
+            var hammer;
+            if (i == mine.length) { //and it must be the defenders player
+                hammer = this.king;
+            } else {
+                hammer = mine[i];
+            }
+            //check all the anvils who are in the mine list
+            for (var j = 0; j < mine.length; j++) {
+                var anvil = mine[j];
+                const destination = this.getMoveLocation(hammer, anvil);
+                console.log("destination: " + destination);
+                //if (this.isCaptureMove(hammer[0], hammer[1], anvil[0], anvil[1], playerId)) {
+                if (destination != undefined && this.isCaptureMove(hammer, destination, playerId)) {
+                    return true;
+                }
+            }
+            //now check the other possible anvils (havens and the king, if defending)
+            const last = this.size - 1;
+            const mid = (this.size - 1)/2;
+            var otherAnvils = [[0, 0], [0, last], [last, 0], [last, last]];
+            if (playerId == 1) {
+                //add the king
+                otherAnvils.push(this.king);
+            }
+            for (var j = 0; j < otherAnvils.length; j++) {
+                var anvil = otherAnvils[j];
+                const destination = this.getMoveLocation(hammer, anvil);
+                console.log("destination: " + destination);
+                //if (this.isCaptureMove(hammer[0], hammer[1], anvil[0], anvil[1], playerId)) {
+                if (destination != undefined && this.isCaptureMove(hammer, destination, playerId)) {
+                    return true;
+                }
+            }
+        }
+        //didn't find a capturing move
+        return false
+        */
+    }
+    
+    /**
+     * Returns the coordinates for a the hammer to land on a hammer/anvil attack.
+     */
+    ,getMoveLocation: function(hammer, anvil) {
+        if (hammer[0] == anvil[0]) {
+            if (hammer[1] < anvil[1] - 2) {
+                return [hammer[0], anvil[1] - 2];
+            } else if (hammer[1] > anvil[1] + 2) {
+                return [hammer[0], anvil[1] + 2];
+            } else {
+                //console.log("ERROR!  Not a legal hammer and anvil move! Hammer: " + hammer + "   anvil: " + anvil);
+            }  
+        } else if (hammer[1] == anvil[1]) {
+            if (hammer[0] < anvil[0] - 2) {
+                return [anvil[0] - 2, anvil[1]];
+            } else if (hammer[1] > anvil[0] + 2) {
+                return [anvil[0] + 2, anvil[1]];
+            } else {
+                //console.log("ERROR!  Not a legal hammer and anvil move! Hammer: " + hammer + "   anvil: " + anvil);
+            }
+        } else {
+            //console.log("ERROR!  Not a legal hammer and anvil move! Hammer: " + hammer + "   anvil: " + anvil);
+        }
+    }
+    
+    /**
+     * Returns lists of the coordinates that could be a victim and anvil in the case of a move.  It does not check whether those pieces are there.  Result: list of pairs: [victimCoords, anvilCoords].
+     */
+    ,getVictimAndAnvilsCoordinates: function(hammer, destination) {
+        const last = this.size - 1;
+        const below  = [];
+        if (destination[1] < this.size - 2) {
+            below.push([[destination[0], destination[1] + 1], [destination[0], destination[1] + 2]]);
+        }
+        const above = [];
+        if (destination[1] > 1) {
+            above.push([[destination[0], destination[1] - 1], [destination[0], destination[1] - 2]]);
+        }
+        const left = [];
+        if (destination[0] > 1) {
+            left.push([[destination[0] - 1, destination[1]], [destination[0] - 2, destination[1]]]);
+        }
+        const right = [];
+        if (destination[0] < this.size - 2) {
+            right.push([[destination[0] + 1, destination[1]], [destination[0] + 2, destination[1]]]);
+        }
+        const victimAndAnvilPairs = [];
+        victimAndAnvilPairs.push(...below);
+        victimAndAnvilPairs.push(...above);
+        victimAndAnvilPairs.push(...left);
+        victimAndAnvilPairs.push(...right);
+        return victimAndAnvilPairs;
+    }
+    
+    /**
+     * Returns whether the game is over.
+     */
+    ,isGameOver: function() {
+        const last = this.size-1;
+        if (this.king[0] == -1) {
+            //the king is dead!
+            return true;
+        } else if (this.coordinatesEquals(this.king, [0, 0]) || this.coordinatesEquals(this.king, [0, last]) || this.coordinatesEquals(this.king, [last, 0]) || this.coordinatesEquals(this.king, [last, last])) {
+            return true; //the king escaped!
+        }
+        return false;
+    }
+    
+    /**
+     * Returns whether two sets of coordinates are equal.
+     */
+    ,coordinatesEquals: function(coordsA, coordsB) {
+        return coordsA[0] == coordsB[0] && coordsA[1] == coordsB[1];
+    }
+    
+    /**
+     * Returns whether a space is empty.
+     */
+    ,canMoveThrough: function(coords, isKing) {
+        const mid = (this.size-1)/2;
+        const last = this.size - 1;
+        //check the special spaces
+        if (this.coordinatesEquals(coords, [0, 0]) || this.coordinatesEquals(coords, [0, last]) || this.coordinatesEquals(coords, [last, 0]) || this.coordinatesEquals(coords, [last, last]) || this.coordinatesEquals(coords, [mid, mid])) {
+            return isKing;
+        }
+        //otherwise, check the lists of pieces (and the king)
+        if (this.coordinatesEquals(coords, this.king)) {
+            return false;
+        }
+        for (var i = 0; i < this.attackers.length; i++) {
+            if (this.coordinatesEquals(coords, this.attackers[i])) {
+                return false;
+            }
+        }
+        for (var i = 0; i < this.defenders.length; i++) {
+            if (this.coordinatesEquals(coords, this.defenders[i])) {
+                return false;
+            }
+        }
+        //there's nothing in that space blocking us!  Let's go! :)
+        return true;
+    }
+    
+    /**
+     * Returns whether the space contains a working anvil. TODO: doesn't check for the Throne.
+     */
+    ,containsAnvil: function(anvilCoords, playerId) {
+        const last = this.size - 1;
+        const mid = last/2;
+        //check for the havens
+        if (this.coordinatesEquals(anvilCoords, [0, 0]) || this.coordinatesEquals(anvilCoords, [0, last]) || this.coordinatesEquals(anvilCoords, [last, 0]) || this.coordinatesEquals(anvilCoords, [last, last])) {
+            return true;
+        }
+        
+        //check for the king
+        if (playerId == 1 && this.coordinatesEquals(this.king, anvilCoords)) {
+            return true;
+        }
+        
+        //check for a teammate
+        const pieces = playerId == 0 ? this.attackers : this.defenders;
+        for (var i = 0; i < pieces.length; i++) {
+            if (this.coordinatesEquals(anvilCoords, pieces[i])) {
+                return true;
+            }
+        }
+        return false;
+        
+    }
+    
+    /**
+     * Returns whether the space contains a victim.  (Opposite id of the playerId.)
+     */
+    ,containsVictim: function(victimCoords, playerId) {
+        //check for the king
+        if (playerId == 0 && this.coordinatesEquals(this.king, victimCoords)) {
+            return true;
+        }
+        //check for an opposing piece
+        const pieces = playerId == 1 ? this.attackers : this.defenders;
+        for (var i = 0; i < pieces.length; i++) {
+            if (this.coordinatesEquals(victimCoords, pieces[i])) {
+                return true;
+            }
+        }
+        return false;
+        
+        
+        
+    }
+    
+}); //end of ForcedCaptureHnefatafl class
+ForcedCaptureHnefatafl.prototype.PLAYER_NAMES = ["Attacker", "Defender"];
+
+
+
+
+const InteractiveForcedCaptureHnefataflView = Class.create({
+    
+    /**
+     * Constructor.
+     */
+    initialize: function(position) {
+        this.position = position;
+        this.selectedTile = undefined;
+    }
+    
+    /**
+     * Draws the board.
+     */
+    ,draw: function(containerElement, listener) {
+        this.selectedTile = undefined;
+        //let's write the board contents out so we can traverse it that way
+        const contents = [];
+        const last = this.position.size-1;
+        //const mid = last/2;
+        for (var col = 0; col < this.position.size; col++) {
+            const column = [];
+            for (var row = 0; row < this.position.size; row++) {
+                column.push("");
+            }
+            contents.push(column);
+        }
+        contents[0][0] += "haven";
+        contents[0][last] += "haven";
+        contents[last][0] += "haven";
+        contents[last][last] += "haven";
+        contents[last/2][last/2] += "throne";
+        if (this.position.king[0] != -1) { //otherwise the king's been captured
+            contents[this.position.king[0]][this.position.king[1]] += "king";
+        }
+        for (var i = 0; i < this.position.defenders.length; i++) {
+            var defender = this.position.defenders[i];
+            contents[defender[0]][defender[1]] += "defender";
+        }
+        for (var i = 0; i < this.position.attackers.length; i++) {
+            var attacker = this.position.attackers[i];
+            contents[attacker[0]][attacker[1]] += "attacker";
+        }
+            
+        //clear out the other children of the container element
+        while (containerElement.hasChildNodes()) {
+            containerElement.removeChild(containerElement.firstChild);
+        }
+        var svgNS = "http://www.w3.org/2000/svg";
+        var boardSvg = document.createElementNS(svgNS, "svg");
+        //now add the new board to the container
+        containerElement.appendChild(boardSvg);
+        var boardWidth = Math.min(getAvailableHorizontalPixels(containerElement), window.innerWidth - 200);
+        var boardPixelSize = Math.min(window.innerHeight, boardWidth);
+        //var boardPixelSize = 10 + (this.position.sideLength + 4) * 100
+        boardSvg.setAttributeNS(null, "width", boardPixelSize);
+        boardSvg.setAttributeNS(null, "height", boardPixelSize);
+        
+        var width = this.position.getWidth();
+        var height = this.position.getHeight();
+        
+        //get some dimensions based on the canvas size
+        var maxCircleWidth = (boardPixelSize - 10) / width;
+        var maxCircleHeight = (boardPixelSize - 10) / (height + 2);
+        var maxDiameter = Math.min(maxCircleWidth, maxCircleHeight);
+        var padPercentage = .2;
+        var boxSide = maxDiameter;
+        var nodeRadius = Math.floor(.5 * maxDiameter * (1-padPercentage));
+        var nodePadding = Math.floor(maxDiameter * padPercentage);
+        
+        //draw a gray frame around everything
+        var frame = document.createElementNS(svgNS, "rect");
+        frame.setAttributeNS(null, "x", 5);
+        frame.setAttributeNS(null, "y", 5);
+        frame.setAttributeNS(null, "width", width * boxSide);
+        frame.setAttributeNS(null, "height", height * boxSide);
+        frame.style.strokeWidth = 4;
+        frame.style.stroke = "gray";
+        boardSvg.appendChild(frame);
+        
+        //draw the board
+        for (var colIndex = 0; colIndex < width; colIndex++) {
+            //draw the boxes in this column
+            for (var rowIndex = 0; rowIndex < height; rowIndex ++) {
+                var text = "";
+                var square = document.createElementNS(svgNS, "rect");
+                var x = 5 + Math.floor((colIndex) * boxSide);
+                var y = 5 + Math.floor((rowIndex) * boxSide);
+                square.setAttributeNS(null, "x", x);
+                square.setAttributeNS(null, "y", y);
+                square.setAttributeNS(null, "width", boxSide+1);
+                square.setAttributeNS(null, "height", boxSide+1);
+                square.style.stroke = "black";
+                square.style.strokeWith = 2;
+                square.style.fill = "gray";
+                var content = contents[colIndex][rowIndex];
+                if (content.includes("haven")) {
+                    square.style.fill = "orange";
+                }
+                if (content.includes("throne")) {
+                    square.style.fill = "burlywood";
+                }
+                if (content.includes("king")) {
+                    text = "K";
+                }
+                if (content.includes("attacker")) {
+                    text = "A";
+                }
+                if (content.includes("defender")) {
+                    text = "D";
+                }
+                
+                if (listener != undefined) {
+                    var player = listener;
+                    square.popType = "single";
+                    square.column = colIndex;
+                    square.row = rowIndex;
+                    square.box = square; // so the text and this can both refer to the square itself
+                    square.onclick = function(event) {player.handleClick(event);}
+                    square.text = text;
+                }
+                boardSvg.appendChild(square);
+                
+                if (text != "") {
+                    const textBuffer = Math.ceil(.17 * boxSide);
+                    const textElement = document.createElementNS(svgNS, "text");
+                    textElement.setAttributeNS(null, "x", x + textBuffer);//+ 20);
+                    textElement.setAttributeNS(null, "y", y + boxSide - textBuffer );//+ 20);
+                    const textSize = Math.ceil(.8 * boxSide);
+                    textElement.setAttributeNS(null, "font-size",  textSize);
+                    if (text == "A") {
+                        textElement.setAttributeNS(null, "color", "black");
+                    } else {
+                        //textElement.setAttributeNS(null, "color", "white");
+                        //textElement.style.color = "white";
+                        textElement.style.fill = "white";
+                    }
+                        
+                    textElement.textContent = text;
+                    textElement.column = colIndex;
+                    textElement.row = rowIndex;
+                    textElement.box = square;
+                    if (listener != undefined) {
+                        var player = listener;
+                        square.popType = "single";
+                        square.column = colIndex;
+                        square.row = rowIndex;
+                        square.box = square; // so the text and this can both refer to the square itself
+                        square.onclick = function(event) {player.handleClick(event);}
+                        textElement.onclick = function(event) {player.handleClick(event);}
+                    }
+                    boardSvg.appendChild(textElement);
+                }
+            }
+        }
+        if (listener != undefined) {
+            const playerId = listener.playerIndex;
+            console.log("playerId: " + playerId);
+            console.log("capture move? " + this.position.hasCaptureMove(playerId));
+            if (this.position.hasCaptureMove(listener.playerIndex)) {
+                console.log("Displaying capture move message!");
+                const captureMessage = document.createElementNS(svgNS, "text");
+                captureMessage.textContent = "There is a forced move.";
+                captureMessage.setAttributeNS(null, "x", 1.1 * boxSide);
+                captureMessage.setAttributeNS(null, "y", (this.position.getHeight()+.6) * boxSide);
+                captureMessage.setAttributeNS(null, "font-size", .4 * boxSide);
+                captureMessage.setAttributeNS(null, "color", "black");
+                boardSvg.appendChild(captureMessage);
+            }
+        }
+    }
+
+    /**
+     * Selects a tile.
+     */
+    ,selectTile: function(tile) {
+        this.selectedTile = tile;
+        this.selectedTile.oldColor = this.selectedTile.style.fill;
+        this.selectedTile.style.fill = "green";
+    }
+
+    /**
+     * Deselect tile.
+     */
+    ,deselectTile: function() {
+        this.selectedTile.style.fill = this.selectedTile.oldColor;
+        this.selectedTile = undefined;
+    }
+
+    ,/**
+     * Handles a mouse click.
+     */
+    getNextPositionFromClick: function(event, currentPlayer, containerElement) {
+        var clickedTile = event.target.box; //this will be a tile
+        //console.log("clickedTile: " + clickedTile);
+        console.log("currentPlayer: " + currentPlayer);
+        if (this.selectedTile === undefined) {
+            const text = clickedTile.text;
+            if ((currentPlayer == 0 && text == "A") ||
+                (currentPlayer == 1 && (text == "D" || text == "K"))) {
+                if (this.position.isMoveablePiece([clickedTile.column, clickedTile.row], currentPlayer)) {
+                    this.selectTile(clickedTile);
+                } else {
+                    console.log("There is another piece that has a forced move.");
+                }
+            }
+            return null;
+        } else {
+            const source = [this.selectedTile.column, this.selectedTile.row];
+            const destination = [clickedTile.column, clickedTile.row];
+            //console.log("Source: " + source + "   Destination: " + destination);
+            const option = this.position.getOptionFromMove(source, destination, currentPlayer);
+            //const option = this.position.getMoveAttempt(this.selectedTile.column, this.selectedTile.row, clickedTile.column, clickedTile.row, currentPlayer);
+            this.deselectTile();
+            return option;
+        }
+    }
+    
+}); //end of InteractiveForcedCaptureHnefataflView class
+
+/**
+ * View Factory for ForcedCaptureHnefatafl
+ */
+var InteractiveForcedCaptureHnefataflViewFactory = Class.create({
+    /**
+     * Constructor
+     */
+    initialize: function() {
+    }
+
+    /**
+     * Returns an interactive view
+     */
+    ,getInteractiveBoard: function(position) {
+        return new InteractiveForcedCaptureHnefataflView(position);
+    }
+
+    /**
+     * Returns a view.
+     */
+    ,getView: function(position) {
+        return this.getInteractiveBoard(position);
+    }
+
+}); //end of InteractiveForcedCaptureHnefataflViewFactory
+
+/**
+ * Launches a new ForcedCaptureHnefatafl game.
+ */
+function newForcedCaptureHnefataflGame() {
+    var viewFactory = new InteractiveForcedCaptureHnefataflViewFactory();
+    var playDelay = 1000;
+    var playerOptions = getCommonPlayerOptions(viewFactory, playDelay, 1, 5);
+    var size = parseInt($('boardSize').value);
+    var numDefenders = parseInt($('numDefenders').value);
+    var controlForm = $('gameOptions');
+    var leftPlayer = parseInt(getSelectedRadioValue(controlForm.elements['leftPlayer']));
+    var rightPlayer =  parseInt(getSelectedRadioValue(controlForm.elements['rightPlayer']));
+    var game = new ForcedCaptureHnefatafl(size, numDefenders);
+    var players = [playerOptions[leftPlayer], playerOptions[rightPlayer]];
+    var ref = new Referee(game, players, viewFactory, "MainGameBoard", $('messageBox'), controlForm);
+}
+
+///////////////////////// End of Hnefatafl
+
+
+
+
+/////////////////////////////// Paint Can //////////////////////////////////////////
+
+/**
+ * Paint Can position.
+ * 
+ * Piles are stored in a 2D array of ints.  Each element is a realization.
+ */
+const PaintCan = Class.create(CombinatorialGame, {
+   
+    /**
+     * Constructor.  brickPiles, a list of lists with elements from {"red", "blue", "green", "gray"} to describe the color of the bricks.  
+     */
+    initialize: function(brickPiles) {
+        this.playerNames = ["Blue", "Red"];
+        //deep copy the brickPiles
+        this.piles = [];
+        for (const brickPile of brickPiles) {
+            const pile = [];
+            for (const element of brickPile) {
+                pile.push(element);
+            }
+            this.piles.push(pile);
+        }
+    }
+    
+    /**
+     * Returns a string version of this.
+     */
+    ,toString: function() {
+        var string = "PaintCan with " + this.piles.length + " piles:\n";
+        for (const pile of this.piles) {
+            string += pile + "\n";
+        }
+        return string;
+    }
+    
+    /**
+     * Returns the number of piles.
+     */
+    ,getNumPiles: function() {
+        return this.piles.length;
+    }
+    
+    /**
+     * Returns whether this equals another PaintCan
+     */
+    ,equals: function(other) {
+        if (this.getNumPiles() != other.getNumPiles()) {
+            return false;
+        }
+        for (var i = 0; i < this.getNumPiles(); i++) {
+            const thisPile = this.piles[i];
+            const otherPile = this.piles[i];
+            if (thisPile.length != otherPile.length) {
+                return false;
+            }
+            for (var j = 0; j < thisPile.length; j++) {
+                if (thisPile[j] != otherPile[j]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    
+    /**
+     * Clone.
+     */
+    ,clone: function() {
+        const clone = new PaintCan(this.piles);
+        return clone;
+    }
+    
+    /**
+     * Returns whether a player can play on a specific color.
+     */
+    ,canPlayOnBrick: function(playerId, color) {
+        return color == "green" || (playerId == CombinatorialGame.prototype.LEFT && color == "blue") || (playerId == CombinatorialGame.prototype.RIGHT && color == "red");
+    }
+    
+    /**
+     * Returns the max pile height.
+     */
+    ,getMaxPileHeight: function() {
+        var height = 0;
+        for (const pile of this.piles) {
+            height = Math.max(height, pile.length);
+        }
+        return height;
+    }
+    
+    /**
+     * Returns a single option.
+     */
+    ,getOptionAt: function(pileIndex, brickIndex) {
+        const option = this.clone();
+        //make a new green-only pile
+        const newPile = [];
+        while (newPile.length < brickIndex) {
+            newPile.push("green");
+        }
+        option.piles[pileIndex] = newPile;
+        return option;
+        
+    }
+    
+    /**
+     * Gets the options.
+     */
+    ,getOptionsForPlayer: function(playerId) {
+        //first get the options from classical moves
+        var options = new Array();
+        for (var i = 0; i < this.piles.length; i++) {
+            const pile = this.piles[i];
+            for (var j = 0; j < pile.length; j++) {
+                if (this.canPlayOnBrick(playerId, pile[j])) {
+                    const option = this.getOptionAt(i, j);
+                    options.push(option);
+                }
+            }
+        }
+        return options;
+    }
+}); //end of PaintCan class.
+
+
+
+
+var InteractivePaintCanView = Class.create({
+    
+    /**
+     * Constructor.
+     */
+    initialize: function(position) {
+        this.position = position;
+    }
+    
+    /**
+     * Draws the board.
+     */
+    ,draw: function(containerElement, listener) {
+        console.log("Drawing...");
+        yoGabba = containerElement;
+        gabba = this;
+        //clear out the other children of the container element
+        while (containerElement.hasChildNodes()) {
+            containerElement.removeChild(containerElement.firstChild);
+        }
+        var svgNS = "http://www.w3.org/2000/svg";
+        var boardSvg = document.createElementNS(svgNS, "svg");
+        //now add the new board to the container
+        containerElement.appendChild(boardSvg);
+        //var boardPixelSize = Math.min(window.innerHeight - 100, window.innerWidth - 500);
+        const boardPixelWidth = window.innerWidth - 300;
+        const boardPixelHeight = window.innerHeight - 100;
+        //var boardPixelSize = 10 + (this.position.sideLength + 4) * 100
+        boardSvg.setAttributeNS(null, "width", boardPixelWidth); //boardPixelSize);
+        boardSvg.setAttributeNS(null, "height", boardPixelHeight); //boardPixelSize);
+        
+        //const maxBrickWidth = Math.floor((window.innerWidth - 200) / (2 * this.position.getNumPiles() + 1));
+        const maxBrickWidth = Math.floor(boardPixelWidth / (2 * this.position.getNumPiles() + 1));
+        const maxBrickHeight = Math.floor(boardPixelHeight / (this.position.getMaxPileHeight() + 6));
+        const brickHeight = Math.min(maxBrickHeight, maxBrickWidth / 4);
+        const brickWidth = Math.min(maxBrickWidth, 4 * brickHeight);
+        
+        const groundY = brickHeight * (this.position.getMaxPileHeight() + 4);
+        const groundX = Math.floor(brickWidth * .5);
+        const ground = document.createElementNS(svgNS, "rect");
+        ground.setAttributeNS(null, "x", groundX + "");
+        ground.setAttributeNS(null, "y", groundY + "");
+        ground.setAttributeNS(null, "width", (brickWidth * 2 * this.position.getNumPiles()) + "");
+        ground.setAttributeNS(null, "height", brickHeight + "");
+        ground.style.stroke = "black";
+        ground.style.fill = "brown";
+        boardSvg.appendChild(ground);
+        
+        //draw the piles
+        for (var pileIndex = 0; pileIndex < this.position.getNumPiles(); pileIndex ++) {
+            const pile = this.position.piles[pileIndex];
+            var hasCan = false; //whether there's a paint can on top
+            //draw the pile
+            const brickX = (1 + 2*pileIndex) * brickWidth;
+            for (var brickIndex = 0; brickIndex < pile.length; brickIndex ++) {
+                //draw one brick
+                const brickColor = pile[brickIndex];
+                const brickY = groundY - ((1 + brickIndex) * brickHeight);
+                const brick = document.createElementNS(svgNS, "rect");
+                brick.setAttributeNS(null, "x", brickX + "");
+                brick.setAttributeNS(null, "y", brickY + "");
+                brick.setAttributeNS(null, "width", brickWidth + "");
+                brick.setAttributeNS(null, "height", brickHeight + "");
+                brick.style.stroke = "black";
+                brick.style.fill = brickColor;
+                boardSvg.appendChild(brick);
+                if (listener != undefined) {
+                    brick.pileIndex = pileIndex;
+                    brick.brickIndex = brickIndex;
+                    var player = listener;
+                    brick.onclick = function(event) {player.handleClick(event);};
+                }
+                if (brickColor != "green") {
+                    hasCan = true;
+                }
+            }
+            if (hasCan) {
+                //draw the paint can on top 
+                const can = document.createElementNS(svgNS, "rect");
+                const canX = brickX + Math.floor(brickWidth / 4);
+                const canY = groundY - ((2 + pile.length) * brickHeight);
+                const canHeight = 2 * brickHeight;
+                const canWidth = Math.floor(brickWidth / 2);
+                can.setAttributeNS(null, "x", canX + "");
+                can.setAttributeNS(null, "y", canY + "");
+                can.setAttributeNS(null, "width", canWidth + "");
+                can.setAttributeNS(null, "height", canHeight + "");
+                can.style.stroke = "silver";
+                can.style.fill = "green";
+                boardSvg.appendChild(can);
+            }
+        }
+    }
+
+    /**
+     * Handles the mouse click.
+     */
+    ,getNextPositionFromClick: function(event, currentPlayer, containerElement, player) {
+        const pileIndex = event.target.pileIndex;
+        const brickIndex = event.target.brickIndex;
+        const brickColor = this.position.piles[pileIndex][brickIndex];
+        if (this.position.canPlayOnBrick(currentPlayer, brickColor)) {
+            const option = this.position.getOptionAt(pileIndex, brickIndex);
+            player.sendMoveToRef(option);
+        }
+    }
+    
+    
+});  //end of InteractivePaintCanView
+
+/**
+ * View Factory for PaintCan
+ */
+var InteractivePaintCanViewFactory = Class.create({
+    /**
+     * Constructor
+     */
+    initialize: function() {
+    }
+
+    /**
+     * Returns an interactive view
+     */
+    ,getInteractiveBoard: function(position) {
+        return new InteractivePaintCanView(position);
+    }
+
+    /**
+     * Returns a view.
+     */
+    ,getView: function(position) {
+        return this.getInteractiveBoard(position);
+    }
+
+}); //end of InteractivePaintCanViewFactory
+
+/**
+ * Generates a random PaintCan game.
+ */
+function getRandomPaintCanGame(numPiles, minPileSize, maxPileSize) {
+    const piles = [];
+    const colors = ["blue", "red", "green", "gray"];
+    for (var i = 0; i < numPiles; i++) {
+        const pile = [];
+        const numBricks = minPileSize + Math.floor(Math.random() * (maxPileSize + 1 - minPileSize));
+        for (var j = 0; j < numBricks; j++) {
+            const colorIndex = Math.floor(Math.random() * colors.length);
+            pile.push(colors[colorIndex]);
+        }
+        piles.push(pile);
+    }
+    //mainGame = new PaintCan(piles);
+    return new PaintCan(piles);
+}
+
+/**
+ * Launches a new PaintCan game.
+ */
+function newPaintCanGame() {
+    var viewFactory = new InteractivePaintCanViewFactory();
+    var playDelay = 1000;
+    var playerOptions = getCommonPlayerOptions(viewFactory, playDelay, 2, 8);
+    var width = parseInt($('boardWidth').value);
+    var height = parseInt($('boardHeight').value);
+    var controlForm = $('gameOptions');
+    var leftPlayer = parseInt(getSelectedRadioValue(controlForm.elements['leftPlayer']));
+    var rightPlayer =  parseInt(getSelectedRadioValue(controlForm.elements['rightPlayer']));
+    var game = getRandomPaintCanGame(width, 2, height);
+    var players = [playerOptions[leftPlayer], playerOptions[rightPlayer]];
+    var ref = new Referee(game, players, viewFactory, "MainGameBoard", $('messageBox'), controlForm);
+}
+
+
+PaintCan.prototype.PLAYER_NAMES = ["Blue", "Red"];
+///////////////// End of Paint Can
+
+
 
 
 
@@ -4554,7 +7296,15 @@ var InteractiveSVGConnectFourViewFactory = Class.create({
         return this.getInteractiveBoard(position);
     }
 
-}); //end of InteractiveSVGDomineeringViewFactory
+}); //end of InteractiveSVGConnectFourViewFactory
+
+
+
+
+
+
+
+
 
 /********************************Clobber**********************************************/
 
@@ -6504,21 +9254,6 @@ function newDomineeringGame() {
     ref = new Referee(game, players, viewFactory, "gameCanvas", $('messageBox'), controlForm);
 }
 
-function newGameOfTheAmazons() {
-    var viewFactory = new InteractiveSVGDomineeringViewFactory();
-    var playDelay = 1000;
-    //var playerOptions = [new HumanPlayer(viewFactory), new RandomPlayer(playDelay), new DepthSearchPlayer(playDelay, 1), new DepthSearchPlayer(playDelay, 3), new DepthSearchPlayer(playDelay, 5), new DepthSearchPlayer(200, 7)];
-    var playerOptions = getCommonPlayerOptions(viewFactory, playDelay, 1, 5);
-    var width = parseInt($('boardWidth').value);
-    var height = parseInt($('boardHeight').value);
-    var controlForm = $('gameOptions');
-    var leftPlayer = parseInt(getSelectedRadioValue(controlForm.elements['leftPlayer']));
-    var rightPlayer =  parseInt(getSelectedRadioValue(controlForm.elements['rightPlayer']));
-    game = new Domineering(width, height);
-    var players = [playerOptions[leftPlayer], playerOptions[rightPlayer]];
-    ref = new Referee(game, players, viewFactory, "gameCanvas", $('messageBox'), controlForm);
-}
-
 function newConnectFourGame() {
     var viewFactory = new InteractiveSVGConnectFourViewFactory();
     var playDelay = 1000;
@@ -7068,7 +9803,7 @@ var HumanPlayer = Class.create({
     ,handleClick: function(event) {
         var option = this.view.getNextPositionFromClick(event, this.playerIndex, this.referee.getViewContainer(), this);
         this.sendMoveToRef(option);
-        console.log("Human sent move to the ref.");
+        //console.log("Human sent move to the ref.");
     }
 
     /**
@@ -7596,6 +10331,21 @@ function createBasicGridGameOptions(minWidth, maxWidth, defaultWidth, minHeight,
     return container;
 }
 
+
+/**
+ * Returns a button to start the game.
+ */
+function createStartButton() {var startButton = document.createElement("input");
+    startButton.type = "button";
+    startButton.id = "starter";
+    startButton.value = "Start Game";
+    startButton.style.fontSize = "large";
+    startButton.onclick = newGame;
+    return startButton;
+}
+
+
+
 /**
  * Gets an HTML Element containing the basic game options for a 2-dimensional grid.
  */
@@ -7717,8 +10467,9 @@ function createBasicGridGameOptionsForManalath(minWidth, maxWidth, defaultWidth,
  * Creates an input range element.
  * TODO: move to paithanLibraries
  */
-function createRangeInput(min, max, defaultValue, id) {
-    var slider = new PaitSlider(min, max, 1, defaultValue, id);
+function createRangeInput(min, max, defaultValue, id, step) {
+    const sliderStep = step || 1;
+    var slider = new PaitSlider(min, max, sliderStep, defaultValue, id);
     return slider.toElement();
     /*
     var range = document.createElement("input");
